@@ -310,7 +310,7 @@ Abstract: ${paperInfo.abstract}
         // 基本記事の「論文の内容」セクションを詳細版に置き換え
         const enhancedContent = this.replaceContentSection(basicContent, detailedContent);
         
-        return this.parseArticleContent(enhancedContent, paperInfo);
+        return enhancedContent;
 
     } catch (error) {
       throw new Error(`Failed to generate article: ${error}`);
