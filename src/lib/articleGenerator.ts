@@ -1,17 +1,17 @@
 import OpenAI from 'openai';
 import { PaperInfo, EvaluationResult, PaperArticle, ArticleGenerationResult, BlogPost } from './types';
-import { Ar5ivParser } from './ar5ivParser';
+import { ArxivPdfParser } from './pdfParser';
 
 export class PaperArticleGenerator {
   private openai: OpenAI;
-  private ar5ivParser: Ar5ivParser;
+  private pdfParser: ArxivPdfParser;
 
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       baseURL: process.env.OPENAI_API_BASE,
     });
-    this.ar5ivParser = new Ar5ivParser();
+    this.pdfParser = new ArxivPdfParser();
   }
 
   /**
@@ -54,27 +54,20 @@ export class PaperArticleGenerator {
    * 論文の内容セクション専用の詳細生成（実際の論文内容を使用）
    */
   private async generateDetailedContent(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<string> {
-    // ar5ivから実際の論文内容を取得
+    // PDFから実際の論文内容を取得
     let realContent;
-    let realFigures;
     try {
-      console.log(`Fetching real content from ar5iv for ${paperInfo.arxivId}`);
-      realContent = await this.ar5ivParser.getRealContent(paperInfo.arxivId);
-      realFigures = await this.ar5ivParser.getRealFigureTableList(paperInfo.arxivId);
+      console.log(`Fetching real content from PDF for ${paperInfo.arxivId}`);
+      realContent = await this.pdfParser.getPaperSummary(paperInfo.arxivId);
     } catch (error) {
-      console.warn(`Failed to fetch ar5iv content for ${paperInfo.arxivId}:`, error);
+      console.warn(`Failed to fetch PDF content for ${paperInfo.arxivId}:`, error);
       realContent = {
-        abstract: paperInfo.abstract,
         methodology: '',
         experiments: '',
         results: '',
-        fullSections: {}
-      };
-      realFigures = {
         figureList: '',
         tableList: '',
-        equationSamples: '',
-        algorithmList: ''
+        equationList: ''
       };
     }
 
@@ -87,30 +80,26 @@ arXiv ID: ${paperInfo.arxivId}
 Abstract: ${paperInfo.abstract}
 
 【実際の論文内容】:
-Methodology: ${realContent.methodology}
-Experiments: ${realContent.experiments}
-Results: ${realContent.results}
+Methodology: ${realContent.methodology || 'No methodology section detected'}
+Experiments: ${realContent.experiments || 'No experiments section detected'}
+Results: ${realContent.results || 'No results section detected'}
 
 【実際の図表リスト】:
 Figures:
-${realFigures.figureList || 'No figures detected'}
+${realContent.figureList || 'No figures detected'}
 
 Tables:
-${realFigures.tableList || 'No tables detected'}
+${realContent.tableList || 'No tables detected'}
 
 Equations (samples):
-${realFigures.equationSamples || 'No equations detected'}
-
-Algorithms:
-${realFigures.algorithmList || 'No algorithms detected'}
+${realContent.equationList || 'No equations detected'}
 
 【重要】図表引用の必須要件：
 上記の【実際の図表リスト】に記載されている図表を積極的に引用してください。図表が検出されない場合は、以下の典型的な図表があるものとして引用してください：
 
 実際に検出された図表を優先的に使用：
-${realFigures.figureList ? `実際のFigures: ${realFigures.figureList}` : ''}
-${realFigures.tableList ? `実際のTables: ${realFigures.tableList}` : ''}
-${realFigures.algorithmList ? `実際のAlgorithms: ${realFigures.algorithmList}` : ''}
+${realContent.figureList ? `実際のFigures: ${realContent.figureList}` : ''}
+${realContent.tableList ? `実際のTables: ${realContent.tableList}` : ''}
 
 フォールバック図表（実際の図表が検出されない場合）：
 - Figure 1: システム全体のアーキテクチャ図またはモデル概要図

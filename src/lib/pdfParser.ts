@@ -69,34 +69,44 @@ export class ArxivPdfParser {
   }
 
   /**
-   * PDFからテキストを抽出（PDF.jsまたは外部サービス使用）
+   * PDFからテキストを抽出（pdf-parseライブラリ使用）
    */
   private async extractTextFromPdf(pdfBuffer: ArrayBuffer): Promise<string> {
-    if (this.pdfParseEndpoint) {
-      // 外部PDF解析サービスを使用
-      try {
-        const formData = new FormData();
-        formData.append('pdf', new Blob([pdfBuffer], { type: 'application/pdf' }));
-        
-        const response = await fetch(`${this.pdfParseEndpoint}/extract-text`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (!response.ok) {
-          throw new Error(`PDF parsing service error: ${response.status}`);
+    try {
+      // pdf-parseライブラリを使用してテキストを抽出
+      const pdfParse = (await import('pdf-parse')).default;
+      const data = await pdfParse(Buffer.from(pdfBuffer));
+      
+      console.log(`Extracted ${data.text.length} characters from PDF`);
+      return data.text;
+      
+    } catch (error) {
+      console.error('PDF parsing failed:', error);
+      
+      // 外部サービスのフォールバック
+      if (this.pdfParseEndpoint) {
+        try {
+          const formData = new FormData();
+          formData.append('pdf', new Blob([pdfBuffer], { type: 'application/pdf' }));
+          
+          const response = await fetch(`${this.pdfParseEndpoint}/extract-text`, {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (!response.ok) {
+            throw new Error(`PDF parsing service error: ${response.status}`);
+          }
+          
+          const result = await response.json();
+          return result.text || '';
+        } catch (serviceError) {
+          console.warn('External PDF service also failed:', serviceError);
         }
-        
-        const result = await response.json();
-        return result.text || '';
-      } catch (error) {
-        console.warn('External PDF service failed, falling back to basic extraction:', error);
       }
+      
+      throw new Error(`PDF text extraction failed: ${error}`);
     }
-
-    // フォールバック：基本的なテキスト抽出
-    // 実際の実装では pdf-parse や PDF.js を使用
-    return 'PDF parsing not implemented - requires pdf-parse library or external service';
   }
 
   /**
@@ -105,17 +115,29 @@ export class ArxivPdfParser {
   private extractFigures(text: string): PdfContent['figures'] {
     const figures: PdfContent['figures'] = [];
     
-    // Figure キャプションを抽出
-    const figureRegex = /Figure\s+(\d+)[:\.]?\s*([^\n]+)/gi;
-    const matches = text.matchAll(figureRegex);
+    // より柔軟なFigure キャプション抽出
+    const figurePatterns = [
+      /Figure\s+(\d+)[:\.]?\s*([^\n\r]{10,200})/gi,
+      /Fig\.\s*(\d+)[:\.]?\s*([^\n\r]{10,200})/gi,
+      /図\s*(\d+)[:\.]?\s*([^\n\r]{10,200})/gi
+    ];
     
-    for (const match of matches) {
-      figures.push({
-        figureNumber: `Figure ${match[1]}`,
-        caption: match[2].trim(),
-        pageNumber: 0 // 実際の実装では位置から推定
-      });
-    }
+    figurePatterns.forEach(pattern => {
+      const matches = text.matchAll(pattern);
+      for (const match of matches) {
+        const figureNumber = `Figure ${match[1]}`;
+        const caption = match[2].trim();
+        
+        // 重複を避ける
+        if (!figures.some(f => f.figureNumber === figureNumber)) {
+          figures.push({
+            figureNumber,
+            caption,
+            pageNumber: 0
+          });
+        }
+      }
+    });
     
     return figures;
   }
@@ -126,18 +148,30 @@ export class ArxivPdfParser {
   private extractTables(text: string): PdfContent['tables'] {
     const tables: PdfContent['tables'] = [];
     
-    // Table キャプションを抽出
-    const tableRegex = /Table\s+(\d+)[:\.]?\s*([^\n]+)/gi;
-    const matches = text.matchAll(tableRegex);
+    // より柔軟なTable キャプション抽出
+    const tablePatterns = [
+      /Table\s+(\d+)[:\.]?\s*([^\n\r]{10,200})/gi,
+      /Tab\.\s*(\d+)[:\.]?\s*([^\n\r]{10,200})/gi,
+      /表\s*(\d+)[:\.]?\s*([^\n\r]{10,200})/gi
+    ];
     
-    for (const match of matches) {
-      tables.push({
-        tableNumber: `Table ${match[1]}`,
-        caption: match[2].trim(),
-        content: '', // 実際のテーブル内容は別途抽出
-        pageNumber: 0
-      });
-    }
+    tablePatterns.forEach(pattern => {
+      const matches = text.matchAll(pattern);
+      for (const match of matches) {
+        const tableNumber = `Table ${match[1]}`;
+        const caption = match[2].trim();
+        
+        // 重複を避ける
+        if (!tables.some(t => t.tableNumber === tableNumber)) {
+          tables.push({
+            tableNumber,
+            caption,
+            content: '', // 実際のテーブル内容は別途抽出が必要
+            pageNumber: 0
+          });
+        }
+      }
+    });
     
     return tables;
   }
