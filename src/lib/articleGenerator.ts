@@ -54,22 +54,36 @@ export class PaperArticleGenerator {
    * 論文の内容セクション専用の詳細生成（実際の論文内容を使用）
    */
   private async generateDetailedContent(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<string> {
-    // PDFから実際の論文内容を取得
+    // PDFから実際の論文内容を取得（環境変数でスキップ可能）
     let realContent;
-    try {
-      console.log(`Fetching real content from PDF for ${paperInfo.arxivId}`);
-      realContent = await this.pdfParser.getPaperSummary(paperInfo.arxivId);
-      console.log(`PDF content extracted successfully for ${paperInfo.arxivId}`);
-    } catch (error) {
-      console.warn(`Failed to fetch PDF content for ${paperInfo.arxivId}, using fallback:`, error);
+    const skipPdfParsing = process.env.SKIP_PDF_PARSING === 'true';
+    
+    if (skipPdfParsing) {
+      console.log(`PDF parsing is disabled, using abstract-based generation for ${paperInfo.arxivId}`);
       realContent = {
-        methodology: 'PDF parsing failed - using abstract-based generation',
-        experiments: 'PDF parsing failed - using abstract-based generation',
-        results: 'PDF parsing failed - using abstract-based generation',
+        methodology: 'PDF parsing disabled - using abstract-based generation',
+        experiments: 'PDF parsing disabled - using abstract-based generation',
+        results: 'PDF parsing disabled - using abstract-based generation',
         figureList: '',
         tableList: '',
         equationList: ''
       };
+    } else {
+      try {
+        console.log(`Fetching real content from PDF for ${paperInfo.arxivId}`);
+        realContent = await this.pdfParser.getPaperSummary(paperInfo.arxivId);
+        console.log(`PDF content extracted successfully for ${paperInfo.arxivId}`);
+      } catch (error) {
+        console.warn(`Failed to fetch PDF content for ${paperInfo.arxivId}, using fallback:`, error);
+        realContent = {
+          methodology: 'PDF parsing failed - using abstract-based generation',
+          experiments: 'PDF parsing failed - using abstract-based generation',
+          results: 'PDF parsing failed - using abstract-based generation',
+          figureList: '',
+          tableList: '',
+          equationList: ''
+        };
+      }
     }
 
     const contentPrompt = `以下の論文について、「論文の内容」セクションのみを4000字以上で詳細に生成してください。
@@ -81,9 +95,11 @@ arXiv ID: ${paperInfo.arxivId}
 Abstract: ${paperInfo.abstract}
 
 【実際の論文内容】:
-${realContent.methodology.includes('PDF parsing failed') 
-  ? `PDF解析に失敗したため、以下のAbstractを基に詳細な技術解説を生成してください：
-Abstract: ${paperInfo.abstract}`
+${realContent.methodology.includes('PDF parsing') 
+  ? `PDF解析が利用できないため、以下のAbstractを基に詳細な技術解説を生成してください：
+Abstract: ${paperInfo.abstract}
+
+注意：実際の論文内容は利用できませんが、Abstractの情報から論理的に推測される手法、実験設定、結果について詳細に記述してください。`
   : `Methodology: ${realContent.methodology}
 Experiments: ${realContent.experiments}
 Results: ${realContent.results}`}

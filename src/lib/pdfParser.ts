@@ -68,19 +68,16 @@ export class ArxivPdfParser {
   }
 
   /**
-   * PDFからテキストを抽出（pdf-parseライブラリ使用）
+   * PDFからテキストを抽出（基本的な抽出のみ）
    */
   private async extractTextFromPdf(pdfBuffer: ArrayBuffer): Promise<string> {
+    console.log('Using basic PDF text extraction method');
+    
+    // pdf-parseライブラリに問題があるため、基本的な抽出のみを使用
     try {
-      // Node.js環境でのpdf-parse使用
-      const pdfParse = require('pdf-parse');
-      const data = await pdfParse(Buffer.from(pdfBuffer));
-      
-      console.log(`Extracted ${data.text.length} characters from PDF`);
-      return data.text;
-      
+      return await this.extractBasicTextFromPdf(pdfBuffer);
     } catch (error) {
-      console.error('PDF parsing with pdf-parse failed:', error);
+      console.error('Basic PDF extraction failed:', error);
       
       // 外部サービスのフォールバック
       if (this.pdfParseEndpoint) {
@@ -105,9 +102,9 @@ export class ArxivPdfParser {
         }
       }
       
-      // 最後のフォールバック：基本的なテキスト抽出の代替
-      console.warn('All PDF parsing methods failed, using fallback approach');
-      return this.extractBasicTextFromPdf(pdfBuffer);
+      // 完全なフォールバック
+      console.warn('All PDF parsing methods failed, returning empty string');
+      return 'PDF text extraction failed completely';
     }
   }
 
@@ -120,15 +117,48 @@ export class ArxivPdfParser {
       const uint8Array = new Uint8Array(pdfBuffer);
       const pdfString = new TextDecoder('latin1').decode(uint8Array);
       
-      // 基本的なPDFテキストオブジェクトを正規表現で抽出
-      const textMatches = pdfString.match(/\((.*?)\)/g) || [];
-      const extractedTexts = textMatches
-        .map(match => match.slice(1, -1))
-        .filter(text => text.length > 3 && /[a-zA-Z]/.test(text))
-        .join(' ');
+      // 複数のパターンでテキストを抽出
+      const extractionPatterns = [
+        /\((.*?)\)/g,           // 基本的なテキストオブジェクト
+        /BT\s+(.*?)\s+ET/g,     // テキストブロック
+        /Tj\s*\[(.*?)\]/g,      // テキスト配列
+        />\s*([A-Za-z0-9\s.,;:!?-]+)\s*</g  // XMLライクなテキスト
+      ];
       
-      console.log(`Basic extraction yielded ${extractedTexts.length} characters`);
-      return extractedTexts;
+      let extractedTexts = [];
+      
+      for (const pattern of extractionPatterns) {
+        const matches = pdfString.match(pattern) || [];
+        const texts = matches
+          .map(match => {
+            // パターンに応じてテキストを抽出
+            if (pattern === extractionPatterns[0]) {
+              return match.slice(1, -1); // ()を除去
+            } else if (pattern === extractionPatterns[1]) {
+              return match.replace(/BT\s+|\s+ET/g, ''); // BT/ETを除去
+            } else {
+              return match;
+            }
+          })
+          .filter(text => text.length > 2 && /[a-zA-Z]/.test(text))
+          .map(text => text.replace(/[^\w\s.,;:!?-]/g, ' ').trim())
+          .filter(text => text.length > 3);
+        
+        extractedTexts.push(...texts);
+      }
+      
+      // 重複を除去して結合
+      const uniqueTexts = [...new Set(extractedTexts)];
+      const finalText = uniqueTexts.join(' ').replace(/\s+/g, ' ').trim();
+      
+      console.log(`Basic extraction yielded ${finalText.length} characters from ${uniqueTexts.length} unique text segments`);
+      
+      if (finalText.length < 100) {
+        console.warn('Basic extraction yielded very little text, PDF might be image-based or encrypted');
+        return 'PDF appears to contain minimal extractable text. This may be an image-based PDF or contain complex formatting.';
+      }
+      
+      return finalText;
       
     } catch (error) {
       console.error('Basic PDF extraction also failed:', error);
