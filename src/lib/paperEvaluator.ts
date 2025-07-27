@@ -1,14 +1,17 @@
 import OpenAI from 'openai';
-import { PaperInfo, EvaluationResult, FormattedOutput } from './types';
+import { PaperInfo, EvaluationResult, FormattedOutput, ArticleGenerationResult } from './types';
+import { PaperArticleGenerator } from './articleGenerator';
 
 export class ArxivPaperEvaluator {
   private openai: OpenAI;
+  private articleGenerator: PaperArticleGenerator;
 
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       baseURL: process.env.OPENAI_API_BASE,
     });
+    this.articleGenerator = new PaperArticleGenerator();
   }
 
   /**
@@ -339,6 +342,31 @@ Abstract: ${paperInfo.abstract}`;
     console.log('Top 3 scores:', top3Results.map(r => r.formattedOutput.point));
 
     return top3Results;
+  }
+
+  /**
+   * 指定日付の論文リストを評価し、上位3件の解説記事を生成
+   */
+  async evaluatePapersWithArticles(date: string, isDebugMode: boolean = true): Promise<{
+    results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>,
+    articles: ArticleGenerationResult[]
+  }> {
+    // 論文評価を実行
+    const results = await this.evaluatePapersByDate(date, isDebugMode);
+    
+    console.log(`Starting article generation for top ${results.length} papers...`);
+    
+    // 上位3件の論文について記事を生成
+    const articleInputs = results.map(result => ({
+      paper: result.paper,
+      evaluation: result.evaluation
+    }));
+    
+    const articles = await this.articleGenerator.generateArticlesForPapers(articleInputs);
+    
+    console.log(`Article generation completed. Generated ${articles.length} articles.`);
+    
+    return { results, articles };
   }
 }
 

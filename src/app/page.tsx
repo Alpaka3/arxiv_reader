@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { EvaluationResponse, DateEvaluationResponse, PaperEvaluationResult } from '@/lib/types';
+import { EvaluationResponse, DateEvaluationResponse, PaperEvaluationResult, ArticleGenerationResult } from '@/lib/types';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'single' | 'date'>('single');
@@ -11,6 +11,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [singleResult, setSingleResult] = useState<EvaluationResponse | null>(null);
   const [dateResults, setDateResults] = useState<DateEvaluationResponse | null>(null);
+  const [generateArticles, setGenerateArticles] = useState(false);
 
   const evaluateSinglePaper = async () => {
     if (!arxivUrl.trim()) {
@@ -53,7 +54,8 @@ export default function Home() {
     setDateResults(null);
 
     try {
-      const response = await fetch('/api/evaluate-by-date', {
+      const endpoint = generateArticles ? '/api/evaluate-with-articles' : '/api/evaluate-by-date';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -210,6 +212,24 @@ export default function Home() {
             </div>
           </div>
         ))}
+
+        {/* 解説記事の表示 */}
+        {result.articles && result.articles.length > 0 && (
+          <div className="mt-8">
+            <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg mb-6">
+              <h3 className="text-lg font-semibold text-indigo-800 mb-2">📚 論文解説記事</h3>
+              <p className="text-indigo-700">
+                上位{result.articles.length}件の論文について詳細な解説記事を生成しました。
+              </p>
+            </div>
+            
+            {result.articles.map((article: ArticleGenerationResult, index: number) => (
+              <div key={`article-${index}`}>
+                {renderArticle(article)}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -305,11 +325,30 @@ export default function Home() {
             </div>
 
             <div className="mb-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={generateArticles}
+                  onChange={(e) => setGenerateArticles(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  📝 解説記事を生成する（上位3件の論文について詳細な記事を自動生成）
+                </span>
+              </label>
+            </div>
+
+            <div className="mb-4">
               <p className="text-sm text-gray-600">
                 {debugMode 
                   ? 'cs.AI, cs.CV, cs.LGカテゴリから各3件ずつ評価し、上位3件を表示します' 
                   : 'cs.AI, cs.CV, cs.LGカテゴリの全ての論文を評価します'
                 }
+                {generateArticles && (
+                  <span className="block mt-1 text-purple-600 font-medium">
+                    💡 解説記事生成が有効です。評価後に上位3件の詳細記事を自動生成します。
+                  </span>
+                )}
               </p>
             </div>
 
@@ -327,5 +366,79 @@ export default function Home() {
       </div>
     </div>
   );
+
+  /**
+   * 論文解説記事を表示するコンポーネント
+   */
+  function renderArticle(article: ArticleGenerationResult) {
+    const { paper, article: articleContent, evaluation } = article;
+    
+    return (
+      <div className="mt-8 p-6 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg shadow-lg">
+        <div className="mb-4">
+          <h3 className="text-xl font-bold text-purple-800 mb-2">
+            📄 {articleContent.title}
+          </h3>
+          <div className="text-sm text-gray-600 mb-2">
+            <span className="font-medium">arXiv ID:</span> {paper.arxivId} | 
+            <span className="font-medium"> 評価スコア:</span> {evaluation.finalScore}点 |
+            <span className="font-medium"> 生成日時:</span> {new Date(articleContent.generatedAt).toLocaleString('ja-JP')}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="p-4 bg-white rounded-lg border border-purple-100">
+            <h4 className="font-semibold text-purple-700 mb-2">📝 TL;DR</h4>
+            <p className="text-gray-700 leading-relaxed">{articleContent.tldr}</p>
+          </div>
+
+          <div className="p-4 bg-white rounded-lg border border-purple-100">
+            <h4 className="font-semibold text-purple-700 mb-2">🎯 背景・目的</h4>
+            <p className="text-gray-700 leading-relaxed">{articleContent.background}</p>
+          </div>
+
+          <div className="p-4 bg-white rounded-lg border border-purple-100">
+            <h4 className="font-semibold text-purple-700 mb-2">✨ この論文の良いところ</h4>
+            <p className="text-gray-700 leading-relaxed">{articleContent.goodPoints}</p>
+          </div>
+
+          <div className="p-4 bg-white rounded-lg border border-purple-100">
+            <h4 className="font-semibold text-purple-700 mb-2">📖 論文の内容</h4>
+            <p className="text-gray-700 leading-relaxed">{articleContent.content}</p>
+          </div>
+
+          <div className="p-4 bg-white rounded-lg border border-purple-100">
+            <h4 className="font-semibold text-purple-700 mb-2">🤔 考察</h4>
+            <p className="text-gray-700 leading-relaxed">{articleContent.consideration}</p>
+          </div>
+
+          <div className="p-4 bg-white rounded-lg border border-purple-100">
+            <h4 className="font-semibold text-purple-700 mb-2">🎉 結論・まとめ</h4>
+            <p className="text-gray-700 leading-relaxed">{articleContent.conclusion}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-purple-200">
+          <details className="text-sm">
+            <summary className="cursor-pointer text-purple-600 hover:text-purple-800 font-medium">
+              📊 評価詳細を表示
+            </summary>
+            <div className="mt-2 p-3 bg-purple-50 rounded">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>著名研究者: {evaluation.famousAuthorScore}点</div>
+                <div>1st Author: {evaluation.firstAuthorScore}点</div>
+                <div>革新性: {evaluation.innovationScore}点</div>
+                <div>応用可能性: {evaluation.applicabilityScore}点</div>
+                <div>学習実験ボーナス: {evaluation.learningExperimentBonus}点</div>
+                <div>キャッチートピックボーナス: {evaluation.trendyTopicBonus}点</div>
+                <div>Software Engineeringペナルティ: {evaluation.softwareEngineeringPenalty}点</div>
+                <div>論理透明性ペナルティ: {evaluation.logicPenalty}点</div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    );
+  }
 }
 
