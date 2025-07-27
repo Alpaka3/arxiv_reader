@@ -1,3 +1,4 @@
 {
-  "/api/evaluate-by-date/route": "app/api/evaluate-by-date/route.js"
+  "/api/evaluate-with-articles/route": "app/api/evaluate-with-articles/route.js",
+  "/page": "app/page.js"
 }

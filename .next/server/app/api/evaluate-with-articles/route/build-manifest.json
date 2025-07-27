@@ -1,16 +1,10 @@
 {
-  "pages": {
-    "/_app": []
-  },
   "devFiles": [],
   "ampDevFiles": [],
   "polyfillFiles": [
     "static/chunks/node_modules_next_dist_build_polyfills_polyfill-nomodule.js"
   ],
-  "lowPriorityFiles": [
-    "static/development/_ssgManifest.js",
-    "static/development/_buildManifest.js"
-  ],
+  "lowPriorityFiles": [],
   "rootMainFiles": [
     "static/chunks/[turbopack]_browser_dev_hmr-client_hmr-client_ts_6aaa83c7._.js",
     "static/chunks/node_modules_next_dist_compiled_react-dom_1f56dc06._.js",
@@ -22,5 +16,6 @@
     "static/chunks/_e69f0d32._.js",
     "static/chunks/_01f48b92._.js"
   ],
+  "pages": {},
   "ampFirstPages": []
 }
