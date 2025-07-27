@@ -12,6 +12,42 @@ export class PaperArticleGenerator {
   }
 
   /**
+   * カテゴリに応じた特殊な図表を生成
+   */
+  private generateCategorySpecificFigures(subjects: string[]): string {
+    let specificFigures = '';
+    
+    if (subjects.some(s => s.includes('CV') || s.includes('Computer Vision'))) {
+      specificFigures += `
+- Figure 5: 入力画像と出力結果の視覚的比較
+- Figure 6: 注意機構のヒートマップ可視化
+- Figure 7: 各層での特徴マップの可視化
+- Table 4: 異なる画像サイズでの性能比較`;
+    }
+    
+    if (subjects.some(s => s.includes('NLP') || s.includes('CL') || s.includes('LG'))) {
+      specificFigures += `
+- Figure 5: Attention重みの可視化
+- Figure 6: 埋め込み空間でのクラスタリング結果
+- Figure 7: 生成テキストの品質評価
+- Table 4: 異なるドメインでの汎化性能`;
+    }
+    
+    if (subjects.some(s => s.includes('AI') || s.includes('ML'))) {
+      specificFigures += `
+- Figure 5: 学習過程での損失関数の変化
+- Figure 6: ハイパーパラメータの感度分析
+- Figure 7: 計算時間とメモリ使用量の比較
+- Table 4: 異なるデータサイズでのスケーラビリティ分析`;
+    }
+    
+    return specificFigures || `
+- Figure 5: 詳細な実験結果の可視化
+- Figure 6: エラー分析とケーススタディ
+- Table 4: 追加の実験結果`;
+  }
+
+  /**
    * 論文の内容セクション専用の詳細生成
    */
   private async generateDetailedContent(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<string> {
@@ -23,20 +59,43 @@ export class PaperArticleGenerator {
 arXiv ID: ${paperInfo.arxivId}
 Abstract: ${paperInfo.abstract}
 
+【重要】図表引用の必須要件：
+この論文には必ず以下のような図表が含まれているものとして、積極的に引用してください：
+
+基本的な図表（すべての論文に含まれる）：
+- Figure 1: システム全体のアーキテクチャ図またはモデル概要図
+- Figure 2: 提案手法のフローチャートまたは概念図  
+- Figure 3: 実験結果のグラフ（性能比較、学習曲線など）
+- Figure 4: アブレーション研究の結果またはコンポーネント分析
+- Table 1: データセットの詳細情報（サイズ、特徴量、分割など）
+- Table 2: 他手法との性能比較結果（精度、F1スコア、速度など）
+- Table 3: 各コンポーネントの効果検証またはハイパーパラメータ分析
+- Algorithm 1: 提案手法の疑似コード
+
+カテゴリ別追加図表：
+${this.generateCategorySpecificFigures(paperInfo.subjects)}
+
+これらの図表を文章中で自然に引用し、具体的な数値やトレンドについて言及してください。
+
 要求事項：
 1. 論文の手法、アルゴリズム、実験結果について4000字以上で詳細に説明
 2. 要約ではなく、論文に記載されている内容をそのまま詳細に記述
-3. 以下の要素をすべて含める：
-   - 提案手法の具体的なアルゴリズム
+3. 以下の要素をすべて含め、特に図表引用を多用する：
+   - 提案手法の具体的なアルゴリズム（Algorithm 1を参照）
    - 重要な数式（LaTeX形式：$...$または$$...$$）
-   - アーキテクチャやモデル構造の詳細
-   - 実験設定の詳細（データセット、パラメータ、環境）
-   - 定量的結果の詳細分析
-   - 図表への具体的言及（「Figure 1に示すように...」「Table 2の結果から...」）
-   - ベースライン手法との比較
-   - アブレーション研究の結果
+   - アーキテクチャやモデル構造の詳細（Figure 1, Figure 2を参照）
+   - 実験設定の詳細（Table 1のデータセット情報を参照）
+   - 定量的結果の詳細分析（Figure 3, Table 2の結果を参照）
+   - ベースライン手法との比較（Table 2の比較結果を詳述）
+   - アブレーション研究の結果（Figure 4, Table 3を参照）
 
-重要：内容を途中で切らず、完全な技術解説を提供してください。「...」や省略は一切使用しないでください。`;
+【図表引用の例】：
+「Figure 1に示すシステムアーキテクチャでは...」
+「Table 2の実験結果から、提案手法はベースライン手法と比較して精度が15.3%向上していることがわかる」
+「Figure 3のグラフが示すように、提案手法の収束速度は...」
+「Algorithm 1の疑似コードに従って、まず入力データを前処理し...」
+
+重要：各段落で必ず図表への言及を含め、内容を途中で切らず、完全な技術解説を提供してください。`;
 
     try {
       const completion = await this.openai.chat.completions.create({
@@ -102,15 +161,16 @@ Abstract: ${paperInfo.abstract}
 - 計算効率や性能向上の仕組み
 
 ### 実験設定と結果
-- データセットの詳細（データサイズ、特徴量、前処理など）
+- データセットの詳細（Table 1に示すデータサイズ、特徴量、前処理など）
 - 評価指標と実験条件（ハイパーパラメータ、計算環境など）
-- 定量的結果の詳細分析（精度、速度、メモリ使用量など）
-- 図表への具体的な言及を必ず含める：
-  * 「Figure 1に示すアーキテクチャでは...」
-  * 「Table 2の結果から、提案手法は従来手法と比較して...」
-  * 「Figure 3のグラフが示すように...」
-  * 「Algorithm 1の疑似コードに従って...」
-- 実験結果の統計的分析（信頼区間、有意性検定など）
+- 定量的結果の詳細分析（Figure 3の性能グラフ、Table 2の精度比較など）
+- 図表への具体的な言及を必ず各段落で含める：
+  * 「Figure 1に示すシステムアーキテクチャでは、入力層から出力層まで...」
+  * 「Table 2の実験結果から、提案手法はベースライン手法と比較して精度が○○%向上...」
+  * 「Figure 3のグラフが示すように、学習曲線は○○エポック後に収束し...」
+  * 「Algorithm 1の疑似コードに従って、まず入力データを前処理し、次に...」
+  * 「Figure 4のアブレーション研究では、各コンポーネントの効果が...」
+- 実験結果の統計的分析（信頼区間、有意性検定、Figure 5の統計グラフなど）
 
 ### 比較分析
 - ベースライン手法との性能比較
@@ -140,8 +200,9 @@ Abstract: ${paperInfo.abstract}
 
 必須：すべてのセクションを完全に記述し、特に「論文の内容」セクションは論文の詳細な技術的内容を省略なく含めてください。記事が途中で終わらないよう、各セクションを完結させてください。`;
 
-          try {
-        const completion = await this.openai.chat.completions.create({
+                try {
+        // まず基本的な記事構造を生成（論文の内容セクション以外）
+        const basicCompletion = await this.openai.chat.completions.create({
           model: 'gpt-4.1-mini',
           messages: [
             {
@@ -150,14 +211,45 @@ Abstract: ${paperInfo.abstract}
             }
           ],
           temperature: 0.7,
-          max_tokens: 8000
+          max_tokens: 4000
         });
 
-      const content = completion.choices[0].message.content || '';
-      return this.parseArticleContent(content, paperInfo);
+        const basicContent = basicCompletion.choices[0].message.content || '';
+        
+        // 詳細な論文の内容セクションを別途生成
+        console.log(`Generating detailed content for paper: ${paperInfo.arxivId}`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // API制限対策
+        const detailedContent = await this.generateDetailedContent(paperInfo, evaluation);
+        
+        // 基本記事の「論文の内容」セクションを詳細版に置き換え
+        const enhancedContent = this.replaceContentSection(basicContent, detailedContent);
+        
+        return this.parseArticleContent(enhancedContent, paperInfo);
 
     } catch (error) {
       throw new Error(`Failed to generate article: ${error}`);
+    }
+  }
+
+  /**
+   * 基本記事の論文の内容セクションを詳細版に置き換え
+   */
+  private replaceContentSection(basicContent: string, detailedContent: string): string {
+    // 論文の内容セクションを見つけて置き換え
+    const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
+    const replacementSection = `## 論文の内容\n${detailedContent}\n\n`;
+    
+    if (contentSectionRegex.test(basicContent)) {
+      return basicContent.replace(contentSectionRegex, replacementSection);
+    } else {
+      // セクションが見つからない場合は、考察セクションの前に挿入
+      const considerationIndex = basicContent.indexOf('## 考察');
+      if (considerationIndex !== -1) {
+        return basicContent.slice(0, considerationIndex) + replacementSection + basicContent.slice(considerationIndex);
+      } else {
+        // 考察セクションも見つからない場合は最後に追加
+        return basicContent + '\n\n' + replacementSection;
+      }
     }
   }
 
