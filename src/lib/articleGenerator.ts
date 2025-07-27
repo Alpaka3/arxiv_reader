@@ -206,7 +206,7 @@ ${realContent.tableList ? `実際のTables: ${realContent.tableList}` : ''}
   /**
    * 論文の解説記事を生成する
    */
-  async generateArticle(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<PaperArticle> {
+  async generateArticle(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<string> {
     const prompt = `以下の論文について、要約ではなく論文の詳細な内容をそのまま解説する技術記事を生成してください。論文の内容を省略せず、具体的な手法、実験、結果をすべて含めてください。
 
 論文情報:
@@ -440,7 +440,10 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
     for (const result of paperResults) {
       try {
         console.log(`Generating article for paper: ${result.paper.arxivId}`);
-        const article = await this.generateArticle(result.paper, result.evaluation);
+        const articleContent = await this.generateArticle(result.paper, result.evaluation);
+        
+        // 文字列コンテンツをPaperArticle形式に変換
+        const article = this.parseArticleContent(articleContent, result.paper);
         
         articles.push({
           paper: result.paper,
