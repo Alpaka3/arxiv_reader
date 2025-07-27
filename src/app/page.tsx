@@ -404,16 +404,25 @@ export default function Home() {
           </div>
 
           <div className="p-6 bg-white rounded-lg border border-purple-100">
-            <h4 className="font-semibold text-purple-700 mb-4 text-lg">📖 論文の内容</h4>
-            <div className="max-h-96 overflow-y-auto pr-2">
+            <h4 className="font-semibold text-purple-700 mb-4 text-lg">
+              📖 論文の内容 
+              <span className="text-xs font-normal text-gray-500 ml-2">
+                ({articleContent.content.length}文字)
+              </span>
+            </h4>
+            <div className="pr-2">
               <MathRenderer 
                 content={articleContent.content} 
                 className="text-gray-700 leading-relaxed whitespace-pre-line text-sm" 
               />
             </div>
-            <div className="mt-2 text-xs text-gray-500 italic">
-              ※ 内容が長い場合はスクロールしてご覧ください
-            </div>
+            {articleContent.content.length < 100 && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-yellow-700 text-sm">
+                  ⚠️ 論文の内容が短すぎます。記事生成に問題がある可能性があります。
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="p-4 bg-white rounded-lg border border-purple-100">
