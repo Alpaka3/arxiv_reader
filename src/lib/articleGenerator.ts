@@ -15,7 +15,7 @@ export class PaperArticleGenerator {
    * 論文の解説記事を生成する
    */
   async generateArticle(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<PaperArticle> {
-    const prompt = `以下の論文について、技術的に詳細で包括的な解説記事を生成してください。
+    const prompt = `以下の論文について、要約ではなく論文の詳細な内容をそのまま解説する技術記事を生成してください。論文の内容を省略せず、具体的な手法、実験、結果をすべて含めてください。
 
 論文情報:
 タイトル: ${paperInfo.title}
@@ -27,6 +27,8 @@ Abstract: ${paperInfo.abstract}
 評価情報:
 最終スコア: ${evaluation.finalScore}点
 評価理由: ${evaluation.reasoning}
+
+注意：この記事は論文の要約ではありません。論文の内容を詳細に、省略せずに解説してください。
 
 以下の構成で記事を生成してください:
 
@@ -40,7 +42,7 @@ Abstract: ${paperInfo.abstract}
 (論文の革新性や貢献度について200字程度で説明)
 
 ## 論文の内容
-(論文の手法、アルゴリズム、実験結果について4000字前後で詳しく説明。以下の要素を必ず含めてください：
+(論文の手法、アルゴリズム、実験結果について4000字以上で詳しく説明。要約ではなく、論文に記載されている内容をそのまま詳細に記述してください。以下の要素を必ず含めてください：
 
 ### 提案手法の詳細
 - アルゴリズムの具体的な手順
