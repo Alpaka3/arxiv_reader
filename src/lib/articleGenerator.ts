@@ -1,14 +1,17 @@
 import OpenAI from 'openai';
 import { PaperInfo, EvaluationResult, PaperArticle, ArticleGenerationResult, BlogPost } from './types';
+import { Ar5ivParser } from './ar5ivParser';
 
 export class PaperArticleGenerator {
   private openai: OpenAI;
+  private ar5ivParser: Ar5ivParser;
 
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       baseURL: process.env.OPENAI_API_BASE,
     });
+    this.ar5ivParser = new Ar5ivParser();
   }
 
   /**
@@ -48,9 +51,33 @@ export class PaperArticleGenerator {
   }
 
   /**
-   * 論文の内容セクション専用の詳細生成
+   * 論文の内容セクション専用の詳細生成（実際の論文内容を使用）
    */
   private async generateDetailedContent(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<string> {
+    // ar5ivから実際の論文内容を取得
+    let realContent;
+    let realFigures;
+    try {
+      console.log(`Fetching real content from ar5iv for ${paperInfo.arxivId}`);
+      realContent = await this.ar5ivParser.getRealContent(paperInfo.arxivId);
+      realFigures = await this.ar5ivParser.getRealFigureTableList(paperInfo.arxivId);
+    } catch (error) {
+      console.warn(`Failed to fetch ar5iv content for ${paperInfo.arxivId}:`, error);
+      realContent = {
+        abstract: paperInfo.abstract,
+        methodology: '',
+        experiments: '',
+        results: '',
+        fullSections: {}
+      };
+      realFigures = {
+        figureList: '',
+        tableList: '',
+        equationSamples: '',
+        algorithmList: ''
+      };
+    }
+
     const contentPrompt = `以下の論文について、「論文の内容」セクションのみを4000字以上で詳細に生成してください。
 
 論文情報:
@@ -59,23 +86,41 @@ export class PaperArticleGenerator {
 arXiv ID: ${paperInfo.arxivId}
 Abstract: ${paperInfo.abstract}
 
-【重要】図表引用の必須要件：
-この論文には必ず以下のような図表が含まれているものとして、積極的に引用してください：
+【実際の論文内容】:
+Methodology: ${realContent.methodology}
+Experiments: ${realContent.experiments}
+Results: ${realContent.results}
 
-基本的な図表（すべての論文に含まれる）：
+【実際の図表リスト】:
+Figures:
+${realFigures.figureList || 'No figures detected'}
+
+Tables:
+${realFigures.tableList || 'No tables detected'}
+
+Equations (samples):
+${realFigures.equationSamples || 'No equations detected'}
+
+Algorithms:
+${realFigures.algorithmList || 'No algorithms detected'}
+
+【重要】図表引用の必須要件：
+上記の【実際の図表リスト】に記載されている図表を積極的に引用してください。図表が検出されない場合は、以下の典型的な図表があるものとして引用してください：
+
+実際に検出された図表を優先的に使用：
+${realFigures.figureList ? `実際のFigures: ${realFigures.figureList}` : ''}
+${realFigures.tableList ? `実際のTables: ${realFigures.tableList}` : ''}
+${realFigures.algorithmList ? `実際のAlgorithms: ${realFigures.algorithmList}` : ''}
+
+フォールバック図表（実際の図表が検出されない場合）：
 - Figure 1: システム全体のアーキテクチャ図またはモデル概要図
 - Figure 2: 提案手法のフローチャートまたは概念図  
 - Figure 3: 実験結果のグラフ（性能比較、学習曲線など）
-- Figure 4: アブレーション研究の結果またはコンポーネント分析
-- Table 1: データセットの詳細情報（サイズ、特徴量、分割など）
-- Table 2: 他手法との性能比較結果（精度、F1スコア、速度など）
-- Table 3: 各コンポーネントの効果検証またはハイパーパラメータ分析
+- Table 1: データセットの詳細情報
+- Table 2: 他手法との性能比較結果
 - Algorithm 1: 提案手法の疑似コード
 
-カテゴリ別追加図表：
-${this.generateCategorySpecificFigures(paperInfo.subjects)}
-
-これらの図表を文章中で自然に引用し、具体的な数値やトレンドについて言及してください。
+実際の論文内容（Methodology, Experiments, Results）を基に、具体的な数値やトレンドについて言及してください。
 
 要求事項：
 1. 論文の手法、アルゴリズム、実験結果について4000字以上で詳細に説明
