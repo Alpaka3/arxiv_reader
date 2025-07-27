@@ -13,7 +13,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { date } = body;
+    const { date, debugMode = true } = body;
 
     if (!date) {
       return NextResponse.json({
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     const evaluator = new ArxivPaperEvaluator();
-    const results = await evaluator.evaluatePapersByDate(date);
+    const results = await evaluator.evaluatePapersByDate(date, debugMode);
 
     return NextResponse.json({
       success: true,

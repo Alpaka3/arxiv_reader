@@ -7,6 +7,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'single' | 'date'>('single');
   const [arxivUrl, setArxivUrl] = useState('https://arxiv.org/abs/2507.14077');
   const [date, setDate] = useState('2025-01-20');
+  const [debugMode, setDebugMode] = useState(true);
   const [loading, setLoading] = useState(false);
   const [singleResult, setSingleResult] = useState<EvaluationResponse | null>(null);
   const [dateResults, setDateResults] = useState<DateEvaluationResponse | null>(null);
@@ -57,7 +58,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ date }),
+        body: JSON.stringify({ date, debugMode }),
       });
 
       const data: DateEvaluationResponse = await response.json();
@@ -156,9 +157,9 @@ export default function Home() {
     return (
       <div className="mt-6 space-y-4">
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="text-lg font-semibold text-blue-800 mb-2">評価結果サマリー</h3>
+          <h3 className="text-lg font-semibold text-blue-800 mb-2">評価結果サマリー（上位3件）</h3>
           <p className="text-blue-700">
-            日付: {result.date} | 論文数: {result.totalPapers}件
+            日付: {result.date} | 表示件数: {result.totalPapers}件
           </p>
         </div>
 
@@ -287,8 +288,28 @@ export default function Home() {
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <p className="text-sm text-gray-600 mt-1">
-                cs.AI, cs.CV, cs.LGカテゴリの論文を評価します
+            </div>
+
+            <div className="mb-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={debugMode}
+                  onChange={(e) => setDebugMode(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  DEBUGモード（各カテゴリ3件ずつ評価、上位3件のみ表示）
+                </span>
+              </label>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-600">
+                {debugMode 
+                  ? 'cs.AI, cs.CV, cs.LGカテゴリから各3件ずつ評価し、上位3件を表示します' 
+                  : 'cs.AI, cs.CV, cs.LGカテゴリの全ての論文を評価します'
+                }
               </p>
             </div>
 

@@ -5,6 +5,7 @@ export interface PaperInfo {
   abstract: string;
   arxivId: string;
   subjects: string[];
+  publishedDate?: string;
 }
 
 // 評価結果の型定義
@@ -22,15 +23,34 @@ export interface EvaluationResult {
   reasoning: string;
 }
 
+// フォーマット済み出力の型定義
+export interface FormattedOutput {
+  reasoning: string;
+  calculation: string;
+  point: number;
+}
+
+// 論文評価結果の型定義
+export interface PaperEvaluationResult {
+  paper: PaperInfo;
+  evaluation: EvaluationResult;
+  formattedOutput: FormattedOutput;
+}
+
 // API レスポンスの型定義
 export interface EvaluationResponse {
   success: boolean;
-  evaluation: EvaluationResult;
-  formattedOutput: {
-    reasoning: string;
-    calculation: string;
-    point: number;
-  };
+  evaluation?: EvaluationResult;
+  formattedOutput?: FormattedOutput;
+  error?: string;
+}
+
+// 日付指定評価のレスポンス型定義
+export interface DateEvaluationResponse {
+  success: boolean;
+  date: string;
+  totalPapers: number;
+  results?: PaperEvaluationResult[];
   error?: string;
 }
 
