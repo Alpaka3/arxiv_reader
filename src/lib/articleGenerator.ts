@@ -15,7 +15,7 @@ export class PaperArticleGenerator {
    * 論文の解説記事を生成する
    */
   async generateArticle(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<PaperArticle> {
-    const prompt = `以下の論文について、一般読者にも理解しやすい解説記事を生成してください。
+    const prompt = `以下の論文について、技術的に詳細で包括的な解説記事を生成してください。
 
 論文情報:
 タイトル: ${paperInfo.title}
@@ -40,7 +40,35 @@ Abstract: ${paperInfo.abstract}
 (論文の革新性や貢献度について200字程度で説明)
 
 ## 論文の内容
-(論文の手法や実験結果について400字程度で詳しく説明)
+(論文の手法、アルゴリズム、実験結果について4000字前後で詳しく説明。以下の要素を必ず含めてください：
+
+### 提案手法の詳細
+- アルゴリズムの具体的な手順
+- 重要な数式をLaTeX形式で記述（例：$L = \sum_{i=1}^{n} \log p(y_i|x_i)$）
+- モデルアーキテクチャの詳細説明
+
+### 技術的革新点
+- 従来手法との具体的な違い
+- 新規性のある技術要素
+- 計算効率や性能向上の仕組み
+
+### 実験設定と結果
+- データセットの詳細（データサイズ、特徴量、前処理など）
+- 評価指標と実験条件（ハイパーパラメータ、計算環境など）
+- 定量的結果の詳細分析（精度、速度、メモリ使用量など）
+- 図表への具体的な言及を必ず含める：
+  * 「Figure 1に示すアーキテクチャでは...」
+  * 「Table 2の結果から、提案手法は従来手法と比較して...」
+  * 「Figure 3のグラフが示すように...」
+  * 「Algorithm 1の疑似コードに従って...」
+- 実験結果の統計的分析（信頼区間、有意性検定など）
+
+### 比較分析
+- ベースライン手法との性能比較
+- アブレーション研究の結果
+- 統計的有意性の検証
+
+専門的な内容も含めつつ、数式や図表を積極的に引用して技術的な深さを持たせてください。)
 
 ## 考察
 (論文の意義や限界、今後の展望について300字程度で考察)
@@ -48,20 +76,28 @@ Abstract: ${paperInfo.abstract}
 ## 結論・まとめ
 (論文の重要性と実用性について200字程度でまとめ)
 
-各セクションは明確に区切り、技術的な内容も一般の読者が理解できるよう平易な言葉で説明してください。`;
+重要：「論文の内容」セクションは特に詳細に記述し、数式、アルゴリズム、図表への言及を積極的に含めてください。技術者や研究者が読んでも満足できる深さを目指してください。
 
-    try {
-      const completion = await this.openai.chat.completions.create({
-        model: 'gpt-4.1-mini',
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000
-      });
+記述例：
+- 数式: 「損失関数は $L = \sum_{i=1}^{n} \ell(f(x_i), y_i)$ で定義され...」
+- 図表引用: 「Figure 2に示すように、提案手法のアーキテクチャは...」「Table 1の実験結果から、精度が15%向上していることがわかる」
+- アルゴリズム: 「Algorithm 1の疑似コードに従って、まず入力データを...」
+- 技術詳細: 「Attention機構において、クエリ $Q$、キー $K$、バリュー $V$ の計算は...」
+
+論文の内容セクションでは、これらの要素を自然に組み込んで、技術的な深さと理解しやすさの両方を実現してください。`;
+
+          try {
+        const completion = await this.openai.chat.completions.create({
+          model: 'gpt-4.1-mini',
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 6000
+        });
 
       const content = completion.choices[0].message.content || '';
       return this.parseArticleContent(content, paperInfo);

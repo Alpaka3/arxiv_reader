@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { EvaluationResponse, DateEvaluationResponse, PaperEvaluationResult, ArticleGenerationResult } from '@/lib/types';
+import MathRenderer from '@/components/MathRenderer';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'single' | 'date'>('single');
@@ -389,32 +390,40 @@ export default function Home() {
         <div className="space-y-4">
           <div className="p-4 bg-white rounded-lg border border-purple-100">
             <h4 className="font-semibold text-purple-700 mb-2">📝 TL;DR</h4>
-            <p className="text-gray-700 leading-relaxed">{articleContent.tldr}</p>
+            <MathRenderer content={articleContent.tldr} className="text-gray-700 leading-relaxed" />
           </div>
 
           <div className="p-4 bg-white rounded-lg border border-purple-100">
             <h4 className="font-semibold text-purple-700 mb-2">🎯 背景・目的</h4>
-            <p className="text-gray-700 leading-relaxed">{articleContent.background}</p>
+            <MathRenderer content={articleContent.background} className="text-gray-700 leading-relaxed" />
           </div>
 
           <div className="p-4 bg-white rounded-lg border border-purple-100">
             <h4 className="font-semibold text-purple-700 mb-2">✨ この論文の良いところ</h4>
-            <p className="text-gray-700 leading-relaxed">{articleContent.goodPoints}</p>
+            <MathRenderer content={articleContent.goodPoints} className="text-gray-700 leading-relaxed" />
           </div>
 
-          <div className="p-4 bg-white rounded-lg border border-purple-100">
-            <h4 className="font-semibold text-purple-700 mb-2">📖 論文の内容</h4>
-            <p className="text-gray-700 leading-relaxed">{articleContent.content}</p>
+          <div className="p-6 bg-white rounded-lg border border-purple-100">
+            <h4 className="font-semibold text-purple-700 mb-4 text-lg">📖 論文の内容</h4>
+            <div className="max-h-96 overflow-y-auto pr-2">
+              <MathRenderer 
+                content={articleContent.content} 
+                className="text-gray-700 leading-relaxed whitespace-pre-line text-sm" 
+              />
+            </div>
+            <div className="mt-2 text-xs text-gray-500 italic">
+              ※ 内容が長い場合はスクロールしてご覧ください
+            </div>
           </div>
 
           <div className="p-4 bg-white rounded-lg border border-purple-100">
             <h4 className="font-semibold text-purple-700 mb-2">🤔 考察</h4>
-            <p className="text-gray-700 leading-relaxed">{articleContent.consideration}</p>
+            <MathRenderer content={articleContent.consideration} className="text-gray-700 leading-relaxed" />
           </div>
 
           <div className="p-4 bg-white rounded-lg border border-purple-100">
             <h4 className="font-semibold text-purple-700 mb-2">🎉 結論・まとめ</h4>
-            <p className="text-gray-700 leading-relaxed">{articleContent.conclusion}</p>
+            <MathRenderer content={articleContent.conclusion} className="text-gray-700 leading-relaxed" />
           </div>
         </div>
 
