@@ -12,6 +12,53 @@ export class PaperArticleGenerator {
   }
 
   /**
+   * 論文の内容セクション専用の詳細生成
+   */
+  private async generateDetailedContent(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<string> {
+    const contentPrompt = `以下の論文について、「論文の内容」セクションのみを4000字以上で詳細に生成してください。
+
+論文情報:
+タイトル: ${paperInfo.title}
+著者: ${paperInfo.authors.join(', ')}
+arXiv ID: ${paperInfo.arxivId}
+Abstract: ${paperInfo.abstract}
+
+要求事項：
+1. 論文の手法、アルゴリズム、実験結果について4000字以上で詳細に説明
+2. 要約ではなく、論文に記載されている内容をそのまま詳細に記述
+3. 以下の要素をすべて含める：
+   - 提案手法の具体的なアルゴリズム
+   - 重要な数式（LaTeX形式：$...$または$$...$$）
+   - アーキテクチャやモデル構造の詳細
+   - 実験設定の詳細（データセット、パラメータ、環境）
+   - 定量的結果の詳細分析
+   - 図表への具体的言及（「Figure 1に示すように...」「Table 2の結果から...」）
+   - ベースライン手法との比較
+   - アブレーション研究の結果
+
+重要：内容を途中で切らず、完全な技術解説を提供してください。「...」や省略は一切使用しないでください。`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4.1-mini',
+        messages: [
+          {
+            role: 'user',
+            content: contentPrompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 6000
+      });
+
+      return completion.choices[0].message.content || '論文の内容セクションの生成に失敗しました。';
+    } catch (error) {
+      console.error('Error generating detailed content:', error);
+      return '論文の内容セクションの生成中にエラーが発生しました。';
+    }
+  }
+
+  /**
    * 論文の解説記事を生成する
    */
   async generateArticle(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<PaperArticle> {
@@ -78,7 +125,12 @@ Abstract: ${paperInfo.abstract}
 ## 結論・まとめ
 (論文の重要性と実用性について200字程度でまとめ)
 
-重要：「論文の内容」セクションは特に詳細に記述し、数式、アルゴリズム、図表への言及を積極的に含めてください。技術者や研究者が読んでも満足できる深さを目指してください。
+重要指示：
+1. 「論文の内容」セクションは4000字以上で詳細に記述してください
+2. 論文の内容を要約せず、具体的な手法、実験、結果をすべて含めてください
+3. 数式、アルゴリズム、図表への言及を積極的に含めてください
+4. 各セクション、特に「論文の内容」セクションを完全に書き切ってください
+5. 途中で内容を省略したり、「...」で終わらせたりしないでください
 
 記述例：
 - 数式: 「損失関数は $L = \sum_{i=1}^{n} \ell(f(x_i), y_i)$ で定義され...」
@@ -86,7 +138,7 @@ Abstract: ${paperInfo.abstract}
 - アルゴリズム: 「Algorithm 1の疑似コードに従って、まず入力データを...」
 - 技術詳細: 「Attention機構において、クエリ $Q$、キー $K$、バリュー $V$ の計算は...」
 
-論文の内容セクションでは、これらの要素を自然に組み込んで、技術的な深さと理解しやすさの両方を実現してください。`;
+必須：すべてのセクションを完全に記述し、特に「論文の内容」セクションは論文の詳細な技術的内容を省略なく含めてください。記事が途中で終わらないよう、各セクションを完結させてください。`;
 
           try {
         const completion = await this.openai.chat.completions.create({
@@ -98,7 +150,7 @@ Abstract: ${paperInfo.abstract}
             }
           ],
           temperature: 0.7,
-          max_tokens: 6000
+          max_tokens: 8000
         });
 
       const content = completion.choices[0].message.content || '';
