@@ -59,12 +59,13 @@ export class PaperArticleGenerator {
     try {
       console.log(`Fetching real content from PDF for ${paperInfo.arxivId}`);
       realContent = await this.pdfParser.getPaperSummary(paperInfo.arxivId);
+      console.log(`PDF content extracted successfully for ${paperInfo.arxivId}`);
     } catch (error) {
-      console.warn(`Failed to fetch PDF content for ${paperInfo.arxivId}:`, error);
+      console.warn(`Failed to fetch PDF content for ${paperInfo.arxivId}, using fallback:`, error);
       realContent = {
-        methodology: '',
-        experiments: '',
-        results: '',
+        methodology: 'PDF parsing failed - using abstract-based generation',
+        experiments: 'PDF parsing failed - using abstract-based generation',
+        results: 'PDF parsing failed - using abstract-based generation',
         figureList: '',
         tableList: '',
         equationList: ''
@@ -80,19 +81,24 @@ arXiv ID: ${paperInfo.arxivId}
 Abstract: ${paperInfo.abstract}
 
 【実際の論文内容】:
-Methodology: ${realContent.methodology || 'No methodology section detected'}
-Experiments: ${realContent.experiments || 'No experiments section detected'}
-Results: ${realContent.results || 'No results section detected'}
+${realContent.methodology.includes('PDF parsing failed') 
+  ? `PDF解析に失敗したため、以下のAbstractを基に詳細な技術解説を生成してください：
+Abstract: ${paperInfo.abstract}`
+  : `Methodology: ${realContent.methodology}
+Experiments: ${realContent.experiments}
+Results: ${realContent.results}`}
 
 【実際の図表リスト】:
-Figures:
+${realContent.figureList || realContent.tableList || realContent.equationList 
+  ? `Figures:
 ${realContent.figureList || 'No figures detected'}
 
 Tables:
 ${realContent.tableList || 'No tables detected'}
 
 Equations (samples):
-${realContent.equationList || 'No equations detected'}
+${realContent.equationList || 'No equations detected'}`
+  : `PDF解析により図表情報を取得できませんでした。論文の分野（${paperInfo.subjects.join(', ')}）に基づいて、典型的な図表を推測して引用してください。`}
 
 【重要】図表引用の必須要件：
 上記の【実際の図表リスト】に記載されている図表を積極的に引用してください。図表が検出されない場合は、以下の典型的な図表があるものとして引用してください：

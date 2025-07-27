@@ -1,5 +1,4 @@
 import { PaperInfo } from './types';
-import pdf from 'pdf-parse';
 
 export interface PdfContent {
   fullText: string;
@@ -73,19 +72,20 @@ export class ArxivPdfParser {
    */
   private async extractTextFromPdf(pdfBuffer: ArrayBuffer): Promise<string> {
     try {
-      // pdf-parseライブラリを使用してテキストを抽出
-      const pdfParse = (await import('pdf-parse')).default;
+      // Node.js環境でのpdf-parse使用
+      const pdfParse = require('pdf-parse');
       const data = await pdfParse(Buffer.from(pdfBuffer));
       
       console.log(`Extracted ${data.text.length} characters from PDF`);
       return data.text;
       
     } catch (error) {
-      console.error('PDF parsing failed:', error);
+      console.error('PDF parsing with pdf-parse failed:', error);
       
       // 外部サービスのフォールバック
       if (this.pdfParseEndpoint) {
         try {
+          console.log('Trying external PDF parsing service...');
           const formData = new FormData();
           formData.append('pdf', new Blob([pdfBuffer], { type: 'application/pdf' }));
           
@@ -105,7 +105,34 @@ export class ArxivPdfParser {
         }
       }
       
-      throw new Error(`PDF text extraction failed: ${error}`);
+      // 最後のフォールバック：基本的なテキスト抽出の代替
+      console.warn('All PDF parsing methods failed, using fallback approach');
+      return this.extractBasicTextFromPdf(pdfBuffer);
+    }
+  }
+
+  /**
+   * 基本的なPDFテキスト抽出のフォールバック
+   */
+  private async extractBasicTextFromPdf(pdfBuffer: ArrayBuffer): Promise<string> {
+    try {
+      // PDFの基本的な構造から可能な限りテキストを抽出
+      const uint8Array = new Uint8Array(pdfBuffer);
+      const pdfString = new TextDecoder('latin1').decode(uint8Array);
+      
+      // 基本的なPDFテキストオブジェクトを正規表現で抽出
+      const textMatches = pdfString.match(/\((.*?)\)/g) || [];
+      const extractedTexts = textMatches
+        .map(match => match.slice(1, -1))
+        .filter(text => text.length > 3 && /[a-zA-Z]/.test(text))
+        .join(' ');
+      
+      console.log(`Basic extraction yielded ${extractedTexts.length} characters`);
+      return extractedTexts;
+      
+    } catch (error) {
+      console.error('Basic PDF extraction also failed:', error);
+      return 'PDF text extraction completely failed. Using metadata only.';
     }
   }
 
@@ -305,7 +332,17 @@ export class ArxivPdfParser {
       
     } catch (error) {
       console.error(`Failed to parse PDF for arXiv:${arxivId}:`, error);
-      throw new Error(`PDF parsing failed: ${error}`);
+      
+      // エラーが発生してもシステムを停止せず、空の結果を返す
+      return {
+        fullText: '',
+        sections: {},
+        figures: [],
+        tables: [],
+        equations: [],
+        algorithms: [],
+        references: []
+      };
     }
   }
 
