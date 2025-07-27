@@ -72,16 +72,17 @@ export class ArxivPaperEvaluator {
   /**
    * 指定日付のarXiv論文リストを取得
    */
-  async fetchPapersByDate(date: string): Promise<PaperInfo[]> {
+  async fetchPapersByDate(date: string, isDebugMode: boolean = true): Promise<PaperInfo[]> {
     const categories = ['cs.AI', 'cs.CV', 'cs.LG'];
     const papers: PaperInfo[] = [];
+    const maxPapersPerCategory = isDebugMode ? 3 : Infinity;
   
     for (const category of categories) {
       let start = 0;
       let keepFetching = true;
+      let categoryCount = 0;
   
-      let count = 0;
-      while (keepFetching) {
+      while (keepFetching && categoryCount < maxPapersPerCategory) {
         try {
           const apiUrl = `http://export.arxiv.org/api/query?search_query=cat:${category}&start=${start}&max_results=100&sortBy=submittedDate&sortOrder=descending`;
           const response = await fetch(apiUrl);
@@ -96,6 +97,8 @@ export class ArxivPaperEvaluator {
           if (entryMatches.length === 0) break;  // もうエントリがない＝終了
   
           for (const entryMatch of entryMatches) {
+            if (categoryCount >= maxPapersPerCategory) break;
+            
             const entryXml = entryMatch[1];
   
             const publishedMatch = entryXml.match(/<published>(.*?)<\/published>/);
@@ -104,10 +107,9 @@ export class ArxivPaperEvaluator {
             const publishedDate = publishedMatch[1].split('T')[0];
   
             if (publishedDate === date) {
-              console.log('new entry,', count);
-              if (count >=3) break;
-              count++;
-              // 論文情報抽出（元コードと同じ）
+              console.log(`New entry for ${category}, count: ${categoryCount}`);
+              
+              // 論文情報抽出
               const titleMatch = entryXml.match(/<title[^>]*>([\s\S]*?)<\/title>/);
               const summaryMatch = entryXml.match(/<summary[^>]*>([\s\S]*?)<\/summary>/);
               const idMatch = entryXml.match(/<id[^>]*>.*?\/([0-9]{4}\.[0-9]{4,5})(?:v[0-9]+)?<\/id>/);
@@ -139,6 +141,7 @@ export class ArxivPaperEvaluator {
                   subjects,
                   publishedDate
                 });
+                categoryCount++;
               }
             } else if (publishedDate < date) {
               // これより古い論文は対象外になるので終了
@@ -155,8 +158,11 @@ export class ArxivPaperEvaluator {
           break;
         }
       }
+      
+      console.log(`Category ${category}: found ${categoryCount} papers`);
     }
   
+    console.log(`Total papers found: ${papers.length}`);
     return papers;
   }
   
@@ -302,18 +308,19 @@ Abstract: ${paperInfo.abstract}`;
   /**
    * 指定日付の論文リストを評価
    */
-  async evaluatePapersByDate(date: string): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
-    const papers = await this.fetchPapersByDate(date);
+  async evaluatePapersByDate(date: string, isDebugMode: boolean = true): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
+    const papers = await this.fetchPapersByDate(date, isDebugMode);
     const results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}> = [];
+
+    console.log(`Starting evaluation of ${papers.length} papers...`);
 
     for (const paper of papers) {
       try {
-
         const startTime = Date.now();
         const { evaluation, formattedOutput } = await this.evaluatePaperWithOpenAI(paper);
         const endTime = Date.now();
         const durationMs = endTime - startTime;
-        console.log(`Evaluation of ${paper.arxivId} took ${durationMs} ms`);
+        console.log(`Evaluation of ${paper.arxivId} took ${durationMs} ms, score: ${formattedOutput.point}`);
 
         results.push({ paper, evaluation, formattedOutput });
         
@@ -324,7 +331,14 @@ Abstract: ${paperInfo.abstract}`;
       }
     }
 
-    return results;
+    // 点数順にソートして上位3件のみを返す
+    const sortedResults = results.sort((a, b) => b.formattedOutput.point - a.formattedOutput.point);
+    const top3Results = sortedResults.slice(0, 3);
+    
+    console.log(`Evaluation completed. Total evaluated: ${results.length}, returning top 3 results.`);
+    console.log('Top 3 scores:', top3Results.map(r => r.formattedOutput.point));
+
+    return top3Results;
   }
 }
 
