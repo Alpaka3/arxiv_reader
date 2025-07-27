@@ -151,22 +151,52 @@ ${realContent.tableList ? `実際のTables: ${realContent.tableList}` : ''}
 「Figure 3のグラフが示すように、提案手法の収束速度は...」
 「Algorithm 1の疑似コードに従って、まず入力データを前処理し...」
 
-重要：各段落で必ず図表への言及を含め、内容を途中で切らず、完全な技術解説を提供してください。`;
+重要指示：
+1. 4000字以上の詳細な技術解説を必ず完成させてください
+2. 記事を途中で終わらせず、必ず最後まで書き切ってください
+3. 各段落で図表への言及を含めてください
+4. 「...」や省略表現は一切使用しないでください
+5. 記事の最後は適切な結論で締めくくってください
 
-    try {
-      const completion = await this.openai.chat.completions.create({
-        model: 'gpt-4.1-mini',
-        messages: [
-          {
-            role: 'user',
-            content: contentPrompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 6000
-      });
+【記事構成の指示】
+以下の順序で必ず全てのセクションを含めてください：
+- 提案手法の詳細説明
+- アーキテクチャの詳細
+- 技術的革新点
+- 実験設定と結果
+- 比較分析
+- 結論
 
-      return completion.choices[0].message.content || '論文の内容セクションの生成に失敗しました。';
+記事を途中で止めず、完全な技術解説として仕上げてください。`;
+
+          try {
+        const completion = await this.openai.chat.completions.create({
+          model: 'gpt-4o-mini', // より強力なモデルを使用
+          messages: [
+            {
+              role: 'system',
+              content: '你是一个专业的学术论文解说专家，擅长生成详细、完整的技术解说文章。你必须确保生成的内容完整且不会中途截断。'
+            },
+            {
+              role: 'user',
+              content: contentPrompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 16000 // さらにトークン数を増加
+        });
+
+        const content = completion.choices[0].message.content || '論文の内容セクションの生成に失敗しました。';
+        
+        // レスポンスが途中で切れていないかチェック
+        if (completion.choices[0].finish_reason === 'length') {
+          console.warn(`Content was truncated for paper ${paperInfo.arxivId}, attempting continuation...`);
+          // 継続生成を試行
+          const continuationContent = await this.continueContentGeneration(content, paperInfo);
+          return content + continuationContent;
+        }
+        
+        return content;
     } catch (error) {
       console.error('Error generating detailed content:', error);
       return '論文の内容セクションの生成中にエラーが発生しました。';
@@ -284,6 +314,48 @@ Abstract: ${paperInfo.abstract}
 
     } catch (error) {
       throw new Error(`Failed to generate article: ${error}`);
+    }
+  }
+
+  /**
+   * 途中で切れたコンテンツの継続生成
+   */
+  private async continueContentGeneration(previousContent: string, paperInfo: PaperInfo): Promise<string> {
+    const continuationPrompt = `以下は論文「${paperInfo.title}」の解説記事の途中までの内容です。この続きを生成して、記事を完成させてください。
+
+途中までの内容:
+${previousContent.slice(-1000)} // 最後の1000文字を含める
+
+要求事項:
+1. 上記の内容の自然な続きを生成してください
+2. 論文の内容セクションを完全に完結させてください
+3. 図表への言及を継続してください
+4. 最低でも1000字以上の続きを生成してください
+5. 記事が途中で終わらないよう、適切な結論で締めくくってください
+
+重要：前の内容と重複しないよう、続きの部分のみを生成してください。`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: '你必须完成这篇技术解说文章，确保内容完整且有适当的结论。'
+          },
+          {
+            role: 'user',
+            content: continuationPrompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 8000
+      });
+
+      return completion.choices[0].message.content || '';
+    } catch (error) {
+      console.error('Error generating continuation:', error);
+      return '\n\n[記事の続きの生成に失敗しました。上記の内容で記事は終了です。]';
     }
   }
 
