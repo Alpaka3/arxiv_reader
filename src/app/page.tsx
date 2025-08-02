@@ -413,7 +413,7 @@ export default function Home() {
             <div className="pr-2">
               <MathRenderer 
                 content={articleContent.content} 
-                className="text-gray-700 leading-relaxed whitespace-pre-line text-sm" 
+                className="text-gray-700 leading-relaxed text-sm" 
               />
             </div>
             {articleContent.content.length < 100 && (

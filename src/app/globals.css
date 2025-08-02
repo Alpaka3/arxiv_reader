@@ -1,0 +1,105 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* カスタムスタイル */
+.prose {
+  /* 見出しのスタイル */
+  --tw-prose-headings: #6b46c1;
+  --tw-prose-h2: #6b46c1;
+  --tw-prose-h3: #7c3aed;
+  --tw-prose-h4: #8b5cf6;
+  
+  /* リンクのスタイル */
+  --tw-prose-links: #6b46c1;
+  
+  /* コードのスタイル */
+  --tw-prose-code: #1f2937;
+  --tw-prose-pre-code: #f9fafb;
+  --tw-prose-pre-bg: #1f2937;
+  
+  /* リストのスタイル */
+  --tw-prose-bullets: #6b46c1;
+  --tw-prose-counters: #6b46c1;
+}
+
+.prose h2 {
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+.prose h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.prose h4 {
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose ul, .prose ol {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.prose li {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.prose p {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.prose strong {
+  color: #374151;
+  font-weight: 600;
+}
+
+.prose em {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.prose blockquote {
+  border-left: 4px solid #6b46c1;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  background-color: #f8fafc;
+  font-style: italic;
+}
+
+.prose code {
+  background-color: #f3f4f6;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+
+.prose pre {
+  background-color: #1f2937;
+  color: #f9fafb;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.prose pre code {
+  background-color: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+/* 数式のスタイル */
+.katex {
+  font-size: 1em;
+}
+
+.katex-display {
+  margin: 1rem 0;
+  text-align: center;
+}
