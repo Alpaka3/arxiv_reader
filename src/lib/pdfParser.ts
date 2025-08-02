@@ -9,6 +9,8 @@ export interface PdfContent {
     figureNumber: string;
     caption: string;
     pageNumber: number;
+    imageData?: string; // base64エンコードされた画像データ
+    imageType?: string; // 画像タイプ (png, jpg, etc.)
   }[];
   tables: {
     tableNumber: string;
@@ -31,6 +33,13 @@ export interface PdfContent {
     title: string;
     authors: string[];
     year: string;
+  }[];
+  images: {
+    pageNumber: number;
+    imageData: string;
+    imageType: string;
+    width?: number;
+    height?: number;
   }[];
 }
 
@@ -65,6 +74,104 @@ export class ArxivPdfParser {
     } catch (error) {
       throw new Error(`PDF download failed: ${error}`);
     }
+  }
+
+  /**
+   * PDFから画像を抽出
+   */
+  private async extractImagesFromPdf(pdfBuffer: ArrayBuffer): Promise<PdfContent['images']> {
+    const images: PdfContent['images'] = [];
+    
+    try {
+      // PDFの基本的な構造から画像オブジェクトを探す
+      const uint8Array = new Uint8Array(pdfBuffer);
+      const pdfString = new TextDecoder('latin1').decode(uint8Array);
+      
+      // PDF内の画像オブジェクトを検索
+      const imagePatterns = [
+        // JPEG画像の開始マーカー
+        /\xFF\xD8\xFF/g,
+        // PNG画像の開始マーカー
+        /\x89PNG\r\n\x1A\n/g
+      ];
+      
+      let imageIndex = 0;
+      
+      for (const pattern of imagePatterns) {
+        const matches = [...pdfString.matchAll(pattern)];
+        
+        for (const match of matches) {
+          try {
+            const startIndex = match.index || 0;
+            let endIndex = startIndex;
+            
+            // 画像の終端を探す
+            if (pattern.source.includes('JPEG') || pattern.source.includes('\\xFF\\xD8\\xFF')) {
+              // JPEG終端マーカーを探す
+              const jpegEndPattern = /\xFF\xD9/g;
+              jpegEndPattern.lastIndex = startIndex;
+              const endMatch = jpegEndPattern.exec(pdfString);
+              if (endMatch) {
+                endIndex = endMatch.index + 2;
+              } else {
+                continue; // 終端が見つからない場合はスキップ
+              }
+            } else if (pattern.source.includes('PNG')) {
+              // PNG終端マーカーを探す
+              const pngEndPattern = /IEND\xAE\x42\x60\x82/g;
+              pngEndPattern.lastIndex = startIndex;
+              const endMatch = pngEndPattern.exec(pdfString);
+              if (endMatch) {
+                endIndex = endMatch.index + 8;
+              } else {
+                continue; // 終端が見つからない場合はスキップ
+              }
+            }
+            
+            if (endIndex > startIndex) {
+              // 画像データを抽出
+              const imageBytes = uint8Array.slice(startIndex, endIndex);
+              const imageBase64 = this.arrayBufferToBase64(imageBytes);
+              const imageType = pattern.source.includes('PNG') ? 'png' : 'jpg';
+              
+              // 最小サイズチェック（小さすぎる画像は除外）
+              if (imageBytes.length > 1000) {
+                images.push({
+                  pageNumber: Math.floor(imageIndex / 5) + 1, // 概算のページ番号
+                  imageData: imageBase64,
+                  imageType: imageType,
+                  width: undefined,
+                  height: undefined
+                });
+                
+                imageIndex++;
+              }
+            }
+          } catch (error) {
+            console.warn('Error extracting individual image:', error);
+          }
+        }
+      }
+      
+      console.log(`Extracted ${images.length} images from PDF`);
+      return images;
+      
+    } catch (error) {
+      console.error('Error extracting images from PDF:', error);
+      return [];
+    }
+  }
+
+  /**
+   * ArrayBufferをBase64文字列に変換
+   */
+  private arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
+    const bytes = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
   }
 
   /**
@@ -167,9 +274,9 @@ export class ArxivPdfParser {
   }
 
   /**
-   * テキストから図表のキャプションを抽出
+   * テキストから図表のキャプションを抽出し、画像と関連付け
    */
-  private extractFigures(text: string): PdfContent['figures'] {
+  private extractFigures(text: string, images: PdfContent['images']): PdfContent['figures'] {
     const figures: PdfContent['figures'] = [];
     
     // より柔軟なFigure キャプション抽出
@@ -187,10 +294,16 @@ export class ArxivPdfParser {
         
         // 重複を避ける
         if (!figures.some(f => f.figureNumber === figureNumber)) {
+          // 対応する画像を探す（図の番号順で関連付け）
+          const figureIndex = parseInt(match[1]) - 1;
+          const relatedImage = images[figureIndex];
+          
           figures.push({
             figureNumber,
             caption,
-            pageNumber: 0
+            pageNumber: 0,
+            imageData: relatedImage?.imageData,
+            imageType: relatedImage?.imageType
           });
         }
       }
@@ -424,9 +537,12 @@ export class ArxivPdfParser {
       console.log(`Extracting text from PDF for arXiv:${arxivId}`);
       const fullText = await this.extractTextFromPdf(pdfBuffer);
       
+      console.log(`Extracting images from PDF for arXiv:${arxivId}`);
+      const images = await this.extractImagesFromPdf(pdfBuffer);
+      
       console.log(`Parsing content structure for arXiv:${arxivId}`);
       const sections = this.extractSections(fullText);
-      const figures = this.extractFigures(fullText);
+      const figures = this.extractFigures(fullText, images);
       const tables = this.extractTables(fullText);
       const equations = this.extractEquations(fullText);
       const algorithms = this.extractAlgorithms(fullText);
@@ -438,7 +554,8 @@ export class ArxivPdfParser {
         tables,
         equations,
         algorithms,
-        references: [] // 参考文献の抽出は別途実装
+        references: [], // 参考文献の抽出は別途実装
+        images
       };
       
     } catch (error) {
@@ -452,7 +569,8 @@ export class ArxivPdfParser {
         tables: [],
         equations: [],
         algorithms: [],
-        references: []
+        references: [],
+        images: []
       };
     }
   }
@@ -528,6 +646,27 @@ export class ArxivPdfParser {
   }
 
   /**
+   * 図をHTML形式に変換
+   */
+  private convertFigureToHtml(figure: PdfContent['figures'][0]): string {
+    if (!figure.imageData || !figure.imageType) {
+      return `<div class="figure-placeholder">
+        <h4>${figure.figureNumber}: ${figure.caption}</h4>
+        <p><em>Figure image could not be extracted from PDF</em></p>
+      </div>`;
+    }
+
+    return `<div class="extracted-figure">
+      <h4>${figure.figureNumber}: ${figure.caption}</h4>
+      <div class="figure-image">
+        <img src="data:image/${figure.imageType};base64,${figure.imageData}" 
+             alt="${figure.figureNumber}: ${figure.caption}"
+             style="max-width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 0.375rem;" />
+      </div>
+    </div>`;
+  }
+
+  /**
    * 論文の主要コンテンツをサマリー形式で取得
    */
   async getPaperSummary(arxivId: string): Promise<{
@@ -538,11 +677,15 @@ export class ArxivPdfParser {
     tableList: string;
     equationList: string;
     tablesHtml: string;
+    figuresHtml: string;
   }> {
     const content = await this.parsePaper(arxivId);
     
     // テーブルをHTML形式に変換
     const tablesHtml = content.tables.map(table => this.convertTableToHtml(table)).join('\n\n');
+    
+    // 図をHTML形式に変換
+    const figuresHtml = content.figures.map(figure => this.convertFigureToHtml(figure)).join('\n\n');
     
     return {
       methodology: content.sections['Methodology'] || content.sections['Method'] || content.sections['Approach'] || '',
@@ -551,7 +694,8 @@ export class ArxivPdfParser {
       figureList: content.figures.map(f => `${f.figureNumber}: ${f.caption}`).join('\n'),
       tableList: content.tables.map(t => `${t.tableNumber}: ${t.caption}`).join('\n'),
       equationList: content.equations.slice(0, 10).map(e => e.equation).join('\n'), // 最初の10個の数式
-      tablesHtml: tablesHtml
+      tablesHtml: tablesHtml,
+      figuresHtml: figuresHtml
     };
   }
 }

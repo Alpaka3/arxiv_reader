@@ -325,6 +325,9 @@ Equations: ${realContent.equationList || 'No equations detected'}
 【抽出されたテーブル内容】:
 ${realContent.tablesHtml || 'No table content extracted'}
 
+【抽出された図の画像】:
+${realContent.figuresHtml || 'No figure images extracted'}
+
 以下の論文について、「論文の内容」セクションのみをHTML記法で生成してください。
 
 要求事項:
@@ -333,7 +336,8 @@ ${realContent.tablesHtml || 'No table content extracted'}
 3. 実際の論文内容（Methodology, Experiments, Results）を基に具体的に記述
 4. 実際に検出された図表を積極的に引用
 5. 抽出されたテーブル内容がある場合は、そのまま記事内に埋め込んで引用する
-6. 以下のHTML構造を含める：
+6. 抽出された図の画像がある場合は、そのまま記事内に埋め込んで引用する
+7. 以下のHTML構造を含める：
    <h2>提案手法の詳細</h2>
    <h2>技術的革新点</h2>
    <h2>実験設定と結果</h2>
@@ -341,11 +345,16 @@ ${realContent.tablesHtml || 'No table content extracted'}
 7. セクションタイトル（## 論文の内容）は含めず、HTML内容のみを出力する
 8. 数式は $...$ （インライン）または $$...$$ （ブロック）形式で記述する
 
-テーブル引用の例:
+図表引用の例:
 抽出されたテーブル内容をそのまま記事に埋め込む場合：
 <p>実験結果を以下に示す：</p>
 [ここに抽出されたテーブルのHTMLをそのまま挿入]
 <p>Table 2の結果から、提案手法は...</p>
+
+抽出された図の画像をそのまま記事に埋め込む場合：
+<p>提案手法のアーキテクチャを以下に示す：</p>
+[ここに抽出された図のHTMLをそのまま挿入]
+<p>Figure 1に示すように、我々の手法は...</p>
 
 重要：記事を途中で終わらせず、必ず最後まで完成させてください。`;
   }

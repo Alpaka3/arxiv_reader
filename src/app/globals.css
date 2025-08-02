@@ -197,3 +197,52 @@
   color: #9ca3af;
   font-style: italic;
 }
+
+/* 抽出された図のスタイル */
+.extracted-figure {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background-color: #f9fafb;
+  text-align: center;
+}
+
+.extracted-figure h4 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.figure-image {
+  margin: 1rem 0;
+}
+
+.figure-image img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+}
+
+.figure-placeholder {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px dashed #d1d5db;
+  border-radius: 0.5rem;
+  background-color: #f9fafb;
+  text-align: center;
+}
+
+.figure-placeholder h4 {
+  margin: 0 0 0.5rem 0;
+  color: #6b7280;
+}
+
+.figure-placeholder p {
+  margin: 0;
+  color: #9ca3af;
+  font-style: italic;
+}
