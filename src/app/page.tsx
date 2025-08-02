@@ -4,8 +4,20 @@ import { useState } from 'react';
 import { EvaluationResponse, DateEvaluationResponse, PaperEvaluationResult, ArticleGenerationResult } from '@/lib/types';
 import MathRenderer from '@/components/MathRenderer';
 
+interface SectionResult {
+  sectionName: string;
+  content: string;
+  prompt: string;
+}
+
+interface SectionGenerationResponse {
+  success: boolean;
+  sections: SectionResult[];
+  error?: string;
+}
+
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'single' | 'date'>('single');
+  const [activeTab, setActiveTab] = useState<'single' | 'date' | 'sections'>('single');
   const [arxivUrl, setArxivUrl] = useState('https://arxiv.org/abs/2507.14077');
   const [date, setDate] = useState('2025-01-20');
   const [debugMode, setDebugMode] = useState(true);
@@ -13,6 +25,12 @@ export default function Home() {
   const [singleResult, setSingleResult] = useState<EvaluationResponse | null>(null);
   const [dateResults, setDateResults] = useState<DateEvaluationResponse | null>(null);
   const [generateArticles, setGenerateArticles] = useState(false);
+  
+  // 個別セクション生成用の状態
+  const [sectionArxivUrl, setSectionArxivUrl] = useState('https://arxiv.org/abs/2507.14077');
+  const [selectedSections, setSelectedSections] = useState<string[]>(['TL;DR', '背景・目的', 'この論文の良いところ', '論文の内容', '考察', '結論・まとめ']);
+  const [sectionResults, setSectionResults] = useState<SectionGenerationResponse | null>(null);
+  const [sectionLoading, setSectionLoading] = useState(false);
 
   const evaluateSinglePaper = async () => {
     if (!arxivUrl.trim()) {
@@ -76,6 +94,63 @@ export default function Home() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateArticleSections = async () => {
+    if (!sectionArxivUrl.trim()) {
+      alert('ArxivのURLを入力してください');
+      return;
+    }
+
+    if (selectedSections.length === 0) {
+      alert('生成するセクションを選択してください');
+      return;
+    }
+
+    setSectionLoading(true);
+    setSectionResults(null);
+
+    try {
+      // まず論文を評価して論文情報と評価結果を取得
+      const evaluationResponse = await fetch('/api/evaluate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ arxivUrl: sectionArxivUrl }),
+      });
+
+      const evaluationData: EvaluationResponse = await evaluationResponse.json();
+      
+      if (!evaluationData.success || !evaluationData.formattedOutput) {
+        throw new Error(evaluationData.error || '論文の評価に失敗しました');
+      }
+
+      // 論文情報と評価結果を使って個別セクションを生成
+      const sectionResponse = await fetch('/api/generate-article-sections', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paperInfo: evaluationData.formattedOutput.paperInfo,
+          evaluation: evaluationData.formattedOutput,
+          sections: selectedSections
+        }),
+      });
+
+      const sectionData: SectionGenerationResponse = await sectionResponse.json();
+      setSectionResults(sectionData);
+    } catch (error) {
+      console.error('Error:', error);
+      setSectionResults({
+        success: false,
+        sections: [],
+        error: 'ネットワークエラーが発生しました'
+      });
+    } finally {
+      setSectionLoading(false);
     }
   };
 
@@ -264,6 +339,16 @@ export default function Home() {
           >
             日付指定論文リスト評価
           </button>
+          <button
+            onClick={() => setActiveTab('sections')}
+            className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
+              activeTab === 'sections'
+                ? 'bg-blue-500 text-white'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            個別セクション生成
+          </button>
         </div>
 
         {/* 単一論文評価タブ */}
@@ -364,9 +449,143 @@ export default function Home() {
             {dateResults && renderDateEvaluation(dateResults)}
           </div>
         )}
+
+        {/* 個別セクション生成タブ */}
+        {activeTab === 'sections' && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="mb-4">
+              <label htmlFor="section-arxiv-url" className="block text-sm font-medium text-gray-700 mb-2">
+                ArxivのURL:
+              </label>
+              <input
+                id="section-arxiv-url"
+                type="text"
+                value={sectionArxivUrl}
+                onChange={(e) => setSectionArxivUrl(e.target.value)}
+                placeholder="https://arxiv.org/abs/2507.14077"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                生成するセクション:
+              </label>
+              <div className="space-y-2">
+                {['TL;DR', '背景・目的', 'この論文の良いところ', '論文の内容', '考察', '結論・まとめ'].map((section) => (
+                  <label key={section} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedSections.includes(section)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedSections([...selectedSections, section]);
+                        } else {
+                          setSelectedSections(selectedSections.filter(s => s !== section));
+                        }
+                      }}
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {section}
+                      {section === '論文の内容' && (
+                        <span className="text-xs text-purple-600 ml-1">(HTML記法)</span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <h4 className="text-sm font-medium text-yellow-800 mb-2">💡 個別セクション生成の特徴:</h4>
+              <ul className="text-xs text-yellow-700 space-y-1">
+                <li>• 各セクションが個別のプロンプトで生成されます</li>
+                <li>• 論文の内容セクションはHTML記法で数式を含む詳細な解説が生成されます</li>
+                <li>• parseArticleContentの手間が省けるため、より効率的です</li>
+                <li>• 使用したプロンプトも確認できます</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={generateArticleSections}
+              disabled={sectionLoading || selectedSections.length === 0}
+              className="w-full bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+            >
+              {sectionLoading ? '生成中...' : '選択したセクションを生成する'}
+            </button>
+
+            {sectionResults && renderSectionResults(sectionResults)}
+          </div>
+        )}
       </div>
     </div>
   );
+
+  /**
+   * 個別セクション結果を表示するコンポーネント
+   */
+  function renderSectionResults(results: SectionGenerationResponse) {
+    if (!results.success) {
+      return (
+        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <h3 className="text-lg font-semibold text-red-800 mb-2">エラー</h3>
+          <p className="text-red-700">{results.error}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-6 space-y-6">
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <h3 className="text-lg font-semibold text-green-800 mb-2">✅ 生成完了</h3>
+          <p className="text-green-700">
+            {results.sections.length}個のセクションが正常に生成されました。
+          </p>
+        </div>
+
+        {results.sections.map((section, index) => (
+          <div key={index} className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg shadow-lg">
+            <div className="p-4 border-b border-purple-200">
+              <h4 className="text-lg font-bold text-purple-800">
+                📝 {section.sectionName}
+              </h4>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-4">
+                <h5 className="text-sm font-semibold text-gray-700 mb-2">生成されたコンテンツ:</h5>
+                <div className="p-4 bg-white rounded-lg border border-purple-100">
+                  {section.sectionName === '論文の内容' ? (
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: section.content }}
+                      className="prose prose-sm max-w-none"
+                    />
+                  ) : (
+                    <MathRenderer 
+                      content={section.content} 
+                      className="text-gray-700 leading-relaxed" 
+                    />
+                  )}
+                </div>
+              </div>
+
+              <details className="mt-4">
+                <summary className="cursor-pointer text-purple-600 hover:text-purple-800 font-medium text-sm">
+                  🔍 使用したプロンプトを表示
+                </summary>
+                <div className="mt-2 p-3 bg-purple-50 rounded border border-purple-200">
+                  <pre className="text-xs text-gray-600 whitespace-pre-wrap overflow-x-auto">
+                    {section.prompt}
+                  </pre>
+                </div>
+              </details>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   /**
    * 論文解説記事を表示するコンポーネント
