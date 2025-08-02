@@ -200,7 +200,7 @@ export class ArxivPdfParser {
   }
 
   /**
-   * テキストからテーブルのキャプションを抽出
+   * テキストからテーブルのキャプションと内容を抽出
    */
   private extractTables(text: string): PdfContent['tables'] {
     const tables: PdfContent['tables'] = [];
@@ -220,10 +220,13 @@ export class ArxivPdfParser {
         
         // 重複を避ける
         if (!tables.some(t => t.tableNumber === tableNumber)) {
+          // テーブルの内容を抽出
+          const tableContent = this.extractTableContent(text, match.index || 0, tableNumber);
+          
           tables.push({
             tableNumber,
             caption,
-            content: '', // 実際のテーブル内容は別途抽出が必要
+            content: tableContent,
             pageNumber: 0
           });
         }
@@ -231,6 +234,84 @@ export class ArxivPdfParser {
     });
     
     return tables;
+  }
+
+  /**
+   * テーブルの実際の内容を抽出
+   */
+  private extractTableContent(text: string, tablePosition: number, tableNumber: string): string {
+    // テーブルキャプションの後から次のセクション/テーブル/図までの範囲を探索
+    const searchStart = tablePosition;
+    const searchEnd = Math.min(text.length, tablePosition + 2000); // 2000文字以内で探索
+    const searchText = text.slice(searchStart, searchEnd);
+    
+    // テーブルの構造を示すパターンを探す
+    const tableStructurePatterns = [
+      // 区切り線で区切られたテーブル
+      /[-\|+\s]{10,}\n([\s\S]*?)\n[-\|+\s]{10,}/g,
+      // タブ区切りやスペース区切りの行が連続するパターン
+      /(\n[^\n]*\t[^\n]*(?:\n[^\n]*\t[^\n]*){2,})/g,
+      // 数値や短いテキストが規則的に並んでいるパターン
+      /(\n(?:[^\n]{1,20}\s+){2,}[^\n]{1,20}(?:\n(?:[^\n]{1,20}\s+){2,}[^\n]{1,20}){2,})/g
+    ];
+    
+    let bestMatch = '';
+    let maxScore = 0;
+    
+    for (const pattern of tableStructurePatterns) {
+      const matches = searchText.matchAll(pattern);
+      for (const match of matches) {
+        const content = match[1] || match[0];
+        const score = this.scoreTableContent(content);
+        
+        if (score > maxScore) {
+          maxScore = score;
+          bestMatch = content.trim();
+        }
+      }
+    }
+    
+    // 見つからない場合は、キャプションの後の数行を取得
+    if (!bestMatch || maxScore < 3) {
+      const lines = searchText.split('\n').slice(1, 10); // キャプションの次の行から9行まで
+      const tableLines = lines.filter(line => 
+        line.trim().length > 10 && 
+        (line.includes('\t') || line.split(/\s+/).length >= 3)
+      );
+      
+      if (tableLines.length >= 2) {
+        bestMatch = tableLines.join('\n');
+      }
+    }
+    
+    return bestMatch || `[${tableNumber} content could not be extracted]`;
+  }
+
+  /**
+   * テーブル内容の品質をスコアリング
+   */
+  private scoreTableContent(content: string): number {
+    let score = 0;
+    const lines = content.split('\n').filter(line => line.trim().length > 0);
+    
+    // 行数によるスコア
+    score += Math.min(lines.length, 10);
+    
+    // 数値が含まれているかによるスコア
+    const numberCount = (content.match(/\b\d+\.?\d*\b/g) || []).length;
+    score += Math.min(numberCount / 5, 5);
+    
+    // 区切り文字によるスコア
+    const separatorCount = (content.match(/[\t\|]/g) || []).length;
+    score += Math.min(separatorCount / 3, 3);
+    
+    // 一行の長さが適切かによるスコア
+    const avgLineLength = lines.reduce((sum, line) => sum + line.length, 0) / lines.length;
+    if (avgLineLength > 20 && avgLineLength < 100) {
+      score += 2;
+    }
+    
+    return score;
   }
 
   /**
@@ -377,6 +458,76 @@ export class ArxivPdfParser {
   }
 
   /**
+   * テーブル内容をHTMLテーブル形式に変換
+   */
+  private convertTableToHtml(table: PdfContent['tables'][0]): string {
+    if (!table.content || table.content.includes('[') && table.content.includes('could not be extracted')) {
+      return `<div class="table-placeholder">
+        <h4>${table.tableNumber}: ${table.caption}</h4>
+        <p><em>Table content could not be extracted from PDF</em></p>
+      </div>`;
+    }
+
+    const lines = table.content.split('\n').filter(line => line.trim().length > 0);
+    if (lines.length < 2) {
+      return `<div class="table-placeholder">
+        <h4>${table.tableNumber}: ${table.caption}</h4>
+        <p><em>Insufficient table data extracted</em></p>
+      </div>`;
+    }
+
+    // テーブルの行を解析
+    const rows = lines.map(line => {
+      // タブ区切り、パイプ区切り、または複数スペース区切りを検出
+      let cells: string[];
+      if (line.includes('\t')) {
+        cells = line.split('\t');
+      } else if (line.includes('|')) {
+        cells = line.split('|').filter(cell => cell.trim().length > 0);
+      } else {
+        // 複数スペースで区切る
+        cells = line.split(/\s{2,}/).filter(cell => cell.trim().length > 0);
+      }
+      
+      return cells.map(cell => cell.trim()).filter(cell => cell.length > 0);
+    });
+
+    // 最初の行をヘッダーとして扱う
+    const headerRow = rows[0];
+    const dataRows = rows.slice(1);
+
+    let htmlTable = `<div class="extracted-table">
+      <h4>${table.tableNumber}: ${table.caption}</h4>
+      <table class="table-content">
+        <thead>
+          <tr>`;
+    
+    headerRow.forEach(header => {
+      htmlTable += `<th>${header}</th>`;
+    });
+    
+    htmlTable += `</tr>
+        </thead>
+        <tbody>`;
+    
+    dataRows.forEach(row => {
+      htmlTable += '<tr>';
+      // ヘッダーの列数に合わせて調整
+      for (let i = 0; i < Math.max(headerRow.length, row.length); i++) {
+        const cellContent = row[i] || '';
+        htmlTable += `<td>${cellContent}</td>`;
+      }
+      htmlTable += '</tr>';
+    });
+    
+    htmlTable += `</tbody>
+      </table>
+    </div>`;
+
+    return htmlTable;
+  }
+
+  /**
    * 論文の主要コンテンツをサマリー形式で取得
    */
   async getPaperSummary(arxivId: string): Promise<{
@@ -386,8 +537,12 @@ export class ArxivPdfParser {
     figureList: string;
     tableList: string;
     equationList: string;
+    tablesHtml: string;
   }> {
     const content = await this.parsePaper(arxivId);
+    
+    // テーブルをHTML形式に変換
+    const tablesHtml = content.tables.map(table => this.convertTableToHtml(table)).join('\n\n');
     
     return {
       methodology: content.sections['Methodology'] || content.sections['Method'] || content.sections['Approach'] || '',
@@ -395,7 +550,8 @@ export class ArxivPdfParser {
       results: content.sections['Results'] || content.sections['Experimental Results'] || '',
       figureList: content.figures.map(f => `${f.figureNumber}: ${f.caption}`).join('\n'),
       tableList: content.tables.map(t => `${t.tableNumber}: ${t.caption}`).join('\n'),
-      equationList: content.equations.slice(0, 10).map(e => e.equation).join('\n') // 最初の10個の数式
+      equationList: content.equations.slice(0, 10).map(e => e.equation).join('\n'), // 最初の10個の数式
+      tablesHtml: tablesHtml
     };
   }
 }
