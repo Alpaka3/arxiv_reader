@@ -221,6 +221,8 @@ Abstract: ${paperInfo.abstract}
 評価理由: ${evaluation.reasoning}
 
 注意：この記事は論文の要約ではありません。論文の内容を詳細に、省略せずに解説してください。
+注意：セクション名（背景・目的など）は省略したり変更せずにそのまま出力してください。見出しのレベル（##など）も変更しないでください。
+
 
 以下の構成で記事を生成してください:
 
@@ -308,7 +310,8 @@ Abstract: ${paperInfo.abstract}
         const detailedContent = await this.generateDetailedContent(paperInfo, evaluation);
         
         // 基本記事の「論文の内容」セクションを詳細版に置き換え
-        const enhancedContent = this.replaceContentSection(basicContent, detailedContent);
+        // const enhancedContent = this.replaceContentSection(basicContent, detailedContent);
+        const enhancedContent = basicContent;
         
         return enhancedContent;
 
@@ -363,6 +366,8 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
    * 基本記事の論文の内容セクションを詳細版に置き換え
    */
   private replaceContentSection(basicContent: string, detailedContent: string): string {
+    console.log("basic:", basicContent);
+    console.log("detailed:", detailedContent);
     // 論文の内容セクションを見つけて置き換え
     const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
     const replacementSection = `## 論文の内容\n${detailedContent}\n\n`;
@@ -411,24 +416,20 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
    * コンテンツから特定のセクションを抽出
    */
   private extractSection(content: string, startMarker: string, endMarker: string | null): string {
-    const startRegex = new RegExp(`##\\s*${startMarker}[\\s\\S]*?\\n([\\s\\S]*?)(?=##|$)`, 'i');
-    const match = content.match(startRegex);
-    
-    if (!match) return '';
-    
-    let sectionContent = match[1].trim();
-    
-    if (endMarker) {
-      const endRegex = new RegExp(`##\\s*${endMarker}`, 'i');
-      const endMatch = sectionContent.search(endRegex);
-      if (endMatch !== -1) {
-        sectionContent = sectionContent.substring(0, endMatch).trim();
-      }
-    }
-    
-    return sectionContent;
+    // エスケープ処理（正規表現用）
+    const escape = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+    const start = escape(startMarker);
+    const end = endMarker ? escape(endMarker) : null;
+  
+    const regex = end
+      ? new RegExp(`##\\s*${start}\\s*\\n([\\s\\S]*?)##\\s*${end}`, 'i')
+      : new RegExp(`##\\s*${start}\\s*\\n([\\s\\S]*)`, 'i');
+  
+    const match = content.match(regex);
+    return match ? match[1].trim() : '';
   }
-
+  
   /**
    * 複数の論文に対して記事を生成
    */
@@ -441,9 +442,12 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
       try {
         console.log(`Generating article for paper: ${result.paper.arxivId}`);
         const articleContent = await this.generateArticle(result.paper, result.evaluation);
+        console.log(articleContent);
         
         // 文字列コンテンツをPaperArticle形式に変換
         const article = this.parseArticleContent(articleContent, result.paper);
+        console.log("ARTICLE #####################:", article);
+        console.log("ARTICLE CONTENT ##################:", articleContent);
         
         articles.push({
           paper: result.paper,
