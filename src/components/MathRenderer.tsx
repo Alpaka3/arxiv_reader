@@ -15,9 +15,17 @@ export default function MathRenderer({ content, className = '' }: MathRendererPr
     if (containerRef.current && content) {
       console.log('Original content:', content.substring(0, 200) + '...');
       
-      // まずMarkdownをHTMLに変換
-      let htmlContent = marked(content) as string;
-      console.log('After Markdown conversion:', htmlContent.substring(0, 200) + '...');
+      // HTMLタグが含まれている場合はMarkdown変換をスキップ
+      let htmlContent: string;
+      if (content.includes('<h2>') || content.includes('<p>') || content.includes('<ul>')) {
+        // 既にHTMLの場合はそのまま使用
+        htmlContent = content;
+        console.log('Content is already HTML, skipping Markdown conversion');
+      } else {
+        // MarkdownをHTMLに変換
+        htmlContent = marked(content) as string;
+        console.log('After Markdown conversion:', htmlContent.substring(0, 200) + '...');
+      }
       
       // KaTeXが利用可能な場合は数式をレンダリング
       if (typeof window !== 'undefined' && (window as any).katex) {

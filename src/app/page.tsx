@@ -633,30 +633,14 @@ export default function Home() {
                     
                     <div className="mb-3">
                       <div className="p-3 bg-gray-50 rounded border">
-                        {section.sectionName === '論文の内容' ? (
-                          <div 
-                            dangerouslySetInnerHTML={{ __html: section.content }}
-                            className="prose prose-sm max-w-none"
-                          />
-                        ) : (
-                          <MathRenderer 
-                            content={section.content} 
-                            className="text-gray-700 leading-relaxed text-sm" 
-                          />
-                        )}
+                        <MathRenderer 
+                          content={section.content} 
+                          className="text-gray-700 leading-relaxed text-sm prose prose-sm max-w-none" 
+                        />
                       </div>
                     </div>
 
-                    <details className="text-xs">
-                      <summary className="cursor-pointer text-purple-600 hover:text-purple-800 font-medium">
-                        🔍 使用したプロンプトを表示
-                      </summary>
-                      <div className="mt-2 p-2 bg-purple-50 rounded border border-purple-200">
-                        <pre className="text-xs text-gray-600 whitespace-pre-wrap overflow-x-auto">
-                          {section.prompt}
-                        </pre>
-                      </div>
-                    </details>
+
                   </div>
                 </div>
               ))}
@@ -701,30 +685,14 @@ export default function Home() {
               <div className="mb-4">
                 <h5 className="text-sm font-semibold text-gray-700 mb-2">生成されたコンテンツ:</h5>
                 <div className="p-4 bg-white rounded-lg border border-purple-100">
-                  {section.sectionName === '論文の内容' ? (
-                    <div 
-                      dangerouslySetInnerHTML={{ __html: section.content }}
-                      className="prose prose-sm max-w-none"
-                    />
-                  ) : (
-                    <MathRenderer 
-                      content={section.content} 
-                      className="text-gray-700 leading-relaxed" 
-                    />
-                  )}
+                  <MathRenderer 
+                    content={section.content} 
+                    className="text-gray-700 leading-relaxed prose prose-sm max-w-none" 
+                  />
                 </div>
               </div>
 
-              <details className="mt-4">
-                <summary className="cursor-pointer text-purple-600 hover:text-purple-800 font-medium text-sm">
-                  🔍 使用したプロンプトを表示
-                </summary>
-                <div className="mt-2 p-3 bg-purple-50 rounded border border-purple-200">
-                  <pre className="text-xs text-gray-600 whitespace-pre-wrap overflow-x-auto">
-                    {section.prompt}
-                  </pre>
-                </div>
-              </details>
+
             </div>
           </div>
         ))}
