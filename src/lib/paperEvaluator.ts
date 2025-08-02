@@ -369,5 +369,83 @@ Abstract: ${paperInfo.abstract}`;
     
     return { results, articles };
   }
+
+  /**
+   * 日付指定で論文を評価し、個別セクション生成を使用
+   */
+  async evaluatePapersWithSections(date: string, isDebugMode: boolean = true): Promise<{
+    results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>,
+    sectionResults: Array<{
+      paper: PaperInfo,
+      evaluation: EvaluationResult,
+      sections: Array<{
+        sectionName: string,
+        content: string,
+        prompt: string
+      }>
+    }>
+  }> {
+    // 論文評価を実行
+    const results = await this.evaluatePapersByDate(date, isDebugMode);
+    
+    console.log(`Starting individual section generation for top ${results.length} papers...`);
+    
+    const sectionResults = [];
+    const allSections = ['TL;DR', '背景・目的', 'この論文の良いところ', '論文の内容', '考察', '結論・まとめ'];
+    
+         // ArticleSectionGeneratorを直接使用
+     const { ArticleSectionGenerator } = await import('../app/api/generate-article-sections/route');
+     const { ArxivPdfParser } = await import('./pdfParser');
+     const pdfParser = new ArxivPdfParser();
+     const sectionGenerator = new ArticleSectionGenerator(this.openai, pdfParser);
+    
+    for (const result of results) {
+      try {
+        console.log(`Generating sections for paper: ${result.paper.arxivId}`);
+        
+        const paperSections = [];
+        for (const sectionName of allSections) {
+          try {
+            const { content, prompt } = await sectionGenerator.generateSection(
+              sectionName,
+              result.paper,
+              result.evaluation
+            );
+            
+            paperSections.push({
+              sectionName,
+              content,
+              prompt
+            });
+
+            // API制限を考慮して待機
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error(`Error generating section ${sectionName} for ${result.paper.arxivId}:`, error);
+            paperSections.push({
+              sectionName,
+              content: `${sectionName}セクションの生成に失敗しました: ${error}`,
+              prompt: ''
+            });
+          }
+        }
+        
+        sectionResults.push({
+          paper: result.paper,
+          evaluation: result.evaluation,
+          sections: paperSections
+        });
+
+        // 論文間の待機
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (error) {
+        console.error(`Error generating sections for ${result.paper.arxivId}:`, error);
+      }
+    }
+    
+    console.log(`Section generation completed. Generated sections for ${sectionResults.length} papers.`);
+    
+    return { results, sectionResults };
+  }
 }
 

@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-class ArticleSectionGenerator {
+export class ArticleSectionGenerator {
   private openai: OpenAI;
   private pdfParser: ArxivPdfParser;
 

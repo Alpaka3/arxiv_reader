@@ -16,6 +16,23 @@ interface SectionGenerationResponse {
   error?: string;
 }
 
+interface DateSectionEvaluationResponse {
+  success: boolean;
+  date: string;
+  totalPapers: number;
+  results?: Array<{
+    paper: any;
+    evaluation: any;
+    formattedOutput: any;
+  }>;
+  sectionResults?: Array<{
+    paper: any;
+    evaluation: any;
+    sections: SectionResult[];
+  }>;
+  error?: string;
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'single' | 'date' | 'sections'>('single');
   const [arxivUrl, setArxivUrl] = useState('https://arxiv.org/abs/2507.14077');
@@ -24,6 +41,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [singleResult, setSingleResult] = useState<EvaluationResponse | null>(null);
   const [dateResults, setDateResults] = useState<DateEvaluationResponse | null>(null);
+  const [dateSectionResults, setDateSectionResults] = useState<DateSectionEvaluationResponse | null>(null);
   const [generateArticles, setGenerateArticles] = useState(false);
   
   // 個別セクション生成用の状態
@@ -71,27 +89,54 @@ export default function Home() {
 
     setLoading(true);
     setDateResults(null);
+    setDateSectionResults(null);
 
     try {
-      const endpoint = generateArticles ? '/api/evaluate-with-articles' : '/api/evaluate-by-date';
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ date, debugMode }),
-      });
+      let endpoint: string;
+      if (generateArticles) {
+        // 個別セクション生成を使用
+        endpoint = '/api/evaluate-with-sections';
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ date, debugMode }),
+        });
 
-      const data: DateEvaluationResponse = await response.json();
-      setDateResults(data);
+        const data: DateSectionEvaluationResponse = await response.json();
+        setDateSectionResults(data);
+      } else {
+        // 従来の評価のみ
+        endpoint = '/api/evaluate-by-date';
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ date, debugMode }),
+        });
+
+        const data: DateEvaluationResponse = await response.json();
+        setDateResults(data);
+      }
     } catch (error) {
       console.error('Error:', error);
-      setDateResults({
-        success: false,
-        date: '',
-        totalPapers: 0,
-        error: 'ネットワークエラーが発生しました'
-      });
+      if (generateArticles) {
+        setDateSectionResults({
+          success: false,
+          date: '',
+          totalPapers: 0,
+          error: 'ネットワークエラーが発生しました'
+        });
+      } else {
+        setDateResults({
+          success: false,
+          date: '',
+          totalPapers: 0,
+          error: 'ネットワークエラーが発生しました'
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -419,7 +464,7 @@ export default function Home() {
                   className="mr-2"
                 />
                 <span className="text-sm font-medium text-gray-700">
-                  📝 解説記事を生成する（上位3件の論文について詳細な記事を自動生成）
+                  📝 個別セクション生成（上位3件の論文について各セクションを個別プロンプトで生成）
                 </span>
               </label>
             </div>
@@ -432,7 +477,7 @@ export default function Home() {
                 }
                 {generateArticles && (
                   <span className="block mt-1 text-purple-600 font-medium">
-                    💡 解説記事生成が有効です。評価後に上位3件の詳細記事を自動生成します。
+                    💡 個別セクション生成が有効です。評価後に上位3件の論文について各セクションを個別プロンプトで生成します。
                   </span>
                 )}
               </p>
@@ -447,6 +492,7 @@ export default function Home() {
             </button>
 
             {dateResults && renderDateEvaluation(dateResults)}
+            {dateSectionResults && renderDateSectionEvaluation(dateSectionResults)}
           </div>
         )}
 
@@ -521,6 +567,105 @@ export default function Home() {
       </div>
     </div>
   );
+
+  /**
+   * 日付指定での個別セクション結果を表示するコンポーネント
+   */
+  function renderDateSectionEvaluation(result: DateSectionEvaluationResponse) {
+    if (!result.success) {
+      return (
+        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <h3 className="text-lg font-semibold text-red-800 mb-2">エラー</h3>
+          <p className="text-red-700">{result.error}</p>
+        </div>
+      );
+    }
+
+    if (!result.sectionResults || result.sectionResults.length === 0) {
+      return (
+        <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h3 className="text-lg font-semibold text-yellow-800 mb-2">結果なし</h3>
+          <p className="text-yellow-700">生成されたセクションがありません。</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-6">
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-6">
+          <h3 className="text-lg font-semibold text-green-800 mb-2">📚 個別セクション生成結果</h3>
+          <p className="text-green-700">
+            {result.date}の論文{result.totalPapers}件について、各セクションを個別プロンプトで生成しました。
+          </p>
+        </div>
+
+        {result.sectionResults.map((paperResult, paperIndex) => (
+          <div key={`paper-sections-${paperIndex}`} className="mb-8">
+            {/* 論文情報ヘッダー */}
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-t-lg">
+              <h4 className="text-lg font-bold text-blue-800 mb-2">
+                📄 {paperResult.paper.title}
+              </h4>
+              <div className="text-sm text-blue-600 mb-2">
+                <span className="font-medium">arXiv ID:</span> {paperResult.paper.arxivId} | 
+                <span className="font-medium"> 評価スコア:</span> {paperResult.evaluation.finalScore}点
+              </div>
+              <div className="text-sm text-blue-600">
+                <span className="font-medium">著者:</span> {paperResult.paper.authors.join(', ')}
+              </div>
+            </div>
+
+            {/* 各セクション */}
+            <div className="border-l border-r border-b border-blue-200 rounded-b-lg bg-white">
+              {paperResult.sections.map((section, sectionIndex) => (
+                <div key={`section-${sectionIndex}`} className="border-b border-gray-100 last:border-b-0">
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h5 className="text-md font-semibold text-purple-700">
+                        📝 {section.sectionName}
+                      </h5>
+                      {section.sectionName === '論文の内容' && (
+                        <span className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded">
+                          HTML記法
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="mb-3">
+                      <div className="p-3 bg-gray-50 rounded border">
+                        {section.sectionName === '論文の内容' ? (
+                          <div 
+                            dangerouslySetInnerHTML={{ __html: section.content }}
+                            className="prose prose-sm max-w-none"
+                          />
+                        ) : (
+                          <MathRenderer 
+                            content={section.content} 
+                            className="text-gray-700 leading-relaxed text-sm" 
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-purple-600 hover:text-purple-800 font-medium">
+                        🔍 使用したプロンプトを表示
+                      </summary>
+                      <div className="mt-2 p-2 bg-purple-50 rounded border border-purple-200">
+                        <pre className="text-xs text-gray-600 whitespace-pre-wrap overflow-x-auto">
+                          {section.prompt}
+                        </pre>
+                      </div>
+                    </details>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   /**
    * 個別セクション結果を表示するコンポーネント
