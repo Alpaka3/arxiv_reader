@@ -37,6 +37,26 @@ export interface PaperEvaluationResult {
   formattedOutput: FormattedOutput;
 }
 
+// 論文解説記事の型定義
+export interface PaperArticle {
+  paperId: string;
+  title: string;
+  tldr: string;
+  background: string;
+  goodPoints: string;
+  content: string;
+  consideration: string;
+  conclusion: string;
+  generatedAt: string;
+}
+
+// 論文解説記事生成結果の型定義
+export interface ArticleGenerationResult {
+  paper: PaperInfo;
+  article: PaperArticle;
+  evaluation: EvaluationResult;
+}
+
 // API レスポンスの型定義
 export interface EvaluationResponse {
   success: boolean;
@@ -51,11 +71,26 @@ export interface DateEvaluationResponse {
   date: string;
   totalPapers: number;
   results?: PaperEvaluationResult[];
+  articles?: ArticleGenerationResult[];
   error?: string;
 }
 
 // API リクエストの型定義
 export interface EvaluationRequest {
   arxivUrl: string;
+}
+
+// MCP連携用のブログポスト型定義（将来の拡張用）
+export interface BlogPost {
+  id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  publishedAt?: string;
+  status: 'draft' | 'published';
+  metadata: {
+    paperInfo: PaperInfo;
+    evaluationScore: number;
+  };
 }
 
