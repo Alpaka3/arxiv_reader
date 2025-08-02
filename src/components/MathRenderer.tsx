@@ -12,9 +12,12 @@ export default function MathRenderer({ content, className = '' }: MathRendererPr
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && content) {
+      console.log('Original content:', content.substring(0, 200) + '...');
+      
       // まずMarkdownをHTMLに変換
       let htmlContent = marked(content) as string;
+      console.log('After Markdown conversion:', htmlContent.substring(0, 200) + '...');
       
       // KaTeXが利用可能な場合は数式をレンダリング
       if (typeof window !== 'undefined' && (window as any).katex) {
@@ -41,6 +44,7 @@ export default function MathRenderer({ content, className = '' }: MathRendererPr
         });
       }
 
+      console.log('Final HTML content:', htmlContent.substring(0, 200) + '...');
       containerRef.current.innerHTML = htmlContent;
     }
   }, [content]);

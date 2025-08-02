@@ -1,5 +1,7 @@
 @import "tailwindcss";
-@plugin "@tailwindcss/typography";
+
+/* Typographyプラグインの設定 */
+@config "./tailwind.config.js";
 
 /* カスタムスタイル */
 .prose {
@@ -20,6 +22,8 @@
   /* リストのスタイル */
   --tw-prose-bullets: #6b46c1;
   --tw-prose-counters: #6b46c1;
+  
+  max-width: none;
 }
 
 .prose h2 {
@@ -27,21 +31,36 @@
   padding-bottom: 0.5rem;
   margin-top: 2rem;
   margin-bottom: 1rem;
+  color: #6b46c1;
+  font-weight: 700;
 }
 
 .prose h3 {
   margin-top: 1.5rem;
   margin-bottom: 0.75rem;
+  color: #7c3aed;
+  font-weight: 600;
 }
 
 .prose h4 {
   margin-top: 1.25rem;
   margin-bottom: 0.5rem;
+  color: #8b5cf6;
+  font-weight: 600;
 }
 
 .prose ul, .prose ol {
   margin-top: 0.75rem;
   margin-bottom: 0.75rem;
+  padding-left: 1.5rem;
+}
+
+.prose ul {
+  list-style-type: disc;
+}
+
+.prose ol {
+  list-style-type: decimal;
 }
 
 .prose li {
@@ -52,6 +71,7 @@
 .prose p {
   margin-top: 0.75rem;
   margin-bottom: 0.75rem;
+  line-height: 1.7;
 }
 
 .prose strong {
@@ -70,6 +90,7 @@
   margin: 1rem 0;
   background-color: #f8fafc;
   font-style: italic;
+  color: #6b7280;
 }
 
 .prose code {
@@ -77,6 +98,8 @@
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
+  color: #1f2937;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 
 .prose pre {
