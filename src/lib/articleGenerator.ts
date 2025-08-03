@@ -552,27 +552,102 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
   }
 
   /**
+   * テキストコンテンツをHTML形式に変換
+   */
+  private async convertContentToHtml(content: string, sectionName: string = 'content'): Promise<string> {
+    const htmlConversionPrompt = `以下の論文解説コンテンツを、適切なHTML形式に変換してください。
+
+要求事項：
+1. 段落は<p>タグで囲む
+2. 見出しがあれば適切なh1-h6タグを使用
+3. 数式は既存の$記法を維持
+4. 既存のimg tagやdivタグは保持
+5. リストがある場合は<ul><li>または<ol><li>を使用
+6. 強調すべき部分は<strong>や<em>を使用
+7. 読みやすいHTML構造にする
+8. 不要な改行は削除し、適切な構造化を行う
+
+変換対象のコンテンツ：
+${content}
+
+注意：
+- HTMLタグのみを出力し、説明文は含めないでください
+- 既存のFigure埋め込み用のdivやimgタグは絶対に変更しないでください
+- 数式の$記法は変更しないでください`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'あなたは技術文書をHTML形式に変換する専門家です。与えられたテキストを適切なHTML構造に変換してください。'
+          },
+          {
+            role: 'user',
+            content: htmlConversionPrompt
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 8000
+      });
+
+      const htmlContent = completion.choices[0].message.content || content;
+      console.log(`Successfully converted ${sectionName} to HTML`);
+      return htmlContent;
+    } catch (error) {
+      console.error('Error converting content to HTML:', error);
+      // エラーの場合は元のコンテンツを返す
+      return content;
+    }
+  }
+
+  /**
    * MCP連携用のブログポスト形式に変換（将来の拡張用）
    */
-  async convertToBlogPost(articleResult: ArticleGenerationResult): Promise<BlogPost> {
+  async convertToBlogPost(articleResult: ArticleGenerationResult, convertAllToHtml: boolean = false): Promise<BlogPost> {
     const { paper, article, evaluation } = articleResult;
+    
+    // 論文の内容をHTML形式に変換
+    console.log('Converting article content to HTML...');
+    const htmlContent = await this.convertContentToHtml(article.content, 'article content');
+    
+    // オプション: 他のセクションもHTML化
+    let htmlBackground = article.background;
+    let htmlGoodPoints = article.goodPoints;
+    let htmlConsideration = article.consideration;
+    let htmlConclusion = article.conclusion;
+    
+    if (convertAllToHtml) {
+      console.log('Converting all sections to HTML...');
+      try {
+        [htmlBackground, htmlGoodPoints, htmlConsideration, htmlConclusion] = await Promise.all([
+          this.convertContentToHtml(article.background, 'background'),
+          this.convertContentToHtml(article.goodPoints, 'good points'),
+          this.convertContentToHtml(article.consideration, 'consideration'),
+          this.convertContentToHtml(article.conclusion, 'conclusion')
+        ]);
+      } catch (error) {
+        console.warn('Error converting some sections to HTML, using original content:', error);
+      }
+    }
     
     const blogContent = `${article.tldr}
 
 ## 背景・目的
-${article.background}
+${htmlBackground}
 
 ## この論文の良いところ
-${article.goodPoints}
+${htmlGoodPoints}
 
 ## 論文の内容
-${article.content}
+${htmlContent}
 
 ## 考察
-${article.consideration}
+${htmlConsideration}
 
 ## 結論・まとめ
-${article.conclusion}
+${htmlConclusion}
 
 ---
 **論文情報**
