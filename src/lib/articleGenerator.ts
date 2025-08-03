@@ -1,17 +1,17 @@
 import OpenAI from 'openai';
 import { PaperInfo, EvaluationResult, PaperArticle, ArticleGenerationResult, BlogPost } from './types';
-import { ArxivPdfParser } from './pdfParser';
+import { ArxivHtmlParser } from './arxivHtmlParser';
 
 export class PaperArticleGenerator {
   private openai: OpenAI;
-  private pdfParser: ArxivPdfParser;
+  private htmlParser: ArxivHtmlParser;
 
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       baseURL: process.env.OPENAI_API_BASE,
     });
-    this.pdfParser = new ArxivPdfParser();
+    this.htmlParser = new ArxivHtmlParser();
   }
 
   /**
@@ -54,31 +54,31 @@ export class PaperArticleGenerator {
    * 論文の内容セクション専用の詳細生成（実際の論文内容を使用）
    */
   private async generateDetailedContent(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<string> {
-    // PDFから実際の論文内容を取得（環境変数でスキップ可能）
+    // HTMLから実際の論文内容を取得（環境変数でスキップ可能）
     let realContent;
-    const skipPdfParsing = process.env.SKIP_PDF_PARSING === 'true';
+    const skipHtmlParsing = process.env.SKIP_HTML_PARSING === 'true';
     
-    if (skipPdfParsing) {
-      console.log(`PDF parsing is disabled, using abstract-based generation for ${paperInfo.arxivId}`);
+    if (skipHtmlParsing) {
+      console.log(`HTML parsing is disabled, using abstract-based generation for ${paperInfo.arxivId}`);
       realContent = {
-        methodology: 'PDF parsing disabled - using abstract-based generation',
-        experiments: 'PDF parsing disabled - using abstract-based generation',
-        results: 'PDF parsing disabled - using abstract-based generation',
+        methodology: 'HTML parsing disabled - using abstract-based generation',
+        experiments: 'HTML parsing disabled - using abstract-based generation',
+        results: 'HTML parsing disabled - using abstract-based generation',
         figureList: '',
         tableList: '',
         equationList: ''
       };
     } else {
       try {
-        console.log(`Fetching real content from PDF for ${paperInfo.arxivId}`);
-        realContent = await this.pdfParser.getPaperSummary(paperInfo.arxivId);
-        console.log(`PDF content extracted successfully for ${paperInfo.arxivId}`);
+        console.log(`Fetching real content from HTML for ${paperInfo.arxivId}`);
+        realContent = await this.htmlParser.getPaperSummary(paperInfo.arxivId);
+        console.log(`HTML content extracted successfully for ${paperInfo.arxivId}`);
       } catch (error) {
-        console.warn(`Failed to fetch PDF content for ${paperInfo.arxivId}, using fallback:`, error);
+        console.warn(`Failed to fetch HTML content for ${paperInfo.arxivId}, using fallback:`, error);
         realContent = {
-          methodology: 'PDF parsing failed - using abstract-based generation',
-          experiments: 'PDF parsing failed - using abstract-based generation',
-          results: 'PDF parsing failed - using abstract-based generation',
+          methodology: 'HTML parsing failed - using abstract-based generation',
+          experiments: 'HTML parsing failed - using abstract-based generation',
+          results: 'HTML parsing failed - using abstract-based generation',
           figureList: '',
           tableList: '',
           equationList: ''
@@ -95,8 +95,8 @@ arXiv ID: ${paperInfo.arxivId}
 Abstract: ${paperInfo.abstract}
 
 【実際の論文内容】:
-${realContent.methodology.includes('PDF parsing') 
-  ? `PDF解析が利用できないため、以下のAbstractを基に詳細な技術解説を生成してください：
+${realContent.methodology.includes('HTML parsing') 
+  ? `HTML解析が利用できないため、以下のAbstractを基に詳細な技術解説を生成してください：
 Abstract: ${paperInfo.abstract}
 
 注意：実際の論文内容は利用できませんが、Abstractの情報から論理的に推測される手法、実験設定、結果について詳細に記述してください。`
@@ -114,7 +114,7 @@ ${realContent.tableList || 'No tables detected'}
 
 Equations (samples):
 ${realContent.equationList || 'No equations detected'}`
-  : `PDF解析により図表情報を取得できませんでした。論文の分野（${paperInfo.subjects.join(', ')}）に基づいて、典型的な図表を推測して引用してください。`}
+  : `HTML解析により図表情報を取得できませんでした。論文の分野（${paperInfo.subjects.join(', ')}）に基づいて、典型的な図表を推測して引用してください。`}
 
 【重要】図表引用の必須要件：
 上記の【実際の図表リスト】に記載されている図表を積極的に引用してください。図表が検出されない場合は、以下の典型的な図表があるものとして引用してください：
@@ -134,7 +134,7 @@ ${realContent.tableList ? `実際のTables: ${realContent.tableList}` : ''}
 実際の論文内容（Methodology, Experiments, Results）を基に、具体的な数値やトレンドについて言及してください。
 
 要求事項：
-1. 論文の手法、アルゴリズム、実験結果について4000字以上で詳細に説明
+1. 論文の手法、アルゴリズム、実験結果について2000字以上で詳細に説明
 2. 要約ではなく、論文に記載されている内容をそのまま詳細に記述
 3. 以下の要素をすべて含め、特に図表引用を多用する：
    - 提案手法の具体的なアルゴリズム（Algorithm 1を参照）
@@ -157,6 +157,7 @@ ${realContent.tableList ? `実際のTables: ${realContent.tableList}` : ''}
 3. 各段落で図表への言及を含めてください
 4. 「...」や省略表現は一切使用しないでください
 5. 記事の最後は適切な結論で締めくくってください
+6. 出力はMarkdown形式で記述してください（後でHTML形式に変換されます）
 
 【記事構成の指示】
 以下の順序で必ず全てのセクションを含めてください：
@@ -171,7 +172,7 @@ ${realContent.tableList ? `実際のTables: ${realContent.tableList}` : ''}
 
           try {
         const completion = await this.openai.chat.completions.create({
-          model: 'gpt-4o-mini', // より強力なモデルを使用
+          model: 'gpt-4o', // より強力なモデルを使用
           messages: [
             {
               role: 'system',
@@ -187,14 +188,18 @@ ${realContent.tableList ? `実際のTables: ${realContent.tableList}` : ''}
         });
 
         const content = completion.choices[0].message.content || '論文の内容セクションの生成に失敗しました。';
-        
-        // レスポンスが途中で切れていないかチェック
-        if (completion.choices[0].finish_reason === 'length') {
-          console.warn(`Content was truncated for paper ${paperInfo.arxivId}, attempting continuation...`);
-          // 継続生成を試行
-          const continuationContent = await this.continueContentGeneration(content, paperInfo);
-          return content + continuationContent;
-        }
+        // // レスポンスが途中で切れていないかチェック
+        // if (completion.choices[0].finish_reason === 'length') {
+        //   console.warn(`Content was truncated for paper ${paperInfo.arxivId}, attempting continuation...`);
+        //   // 継続生成を試行
+        //   const continuationContent = await this.continueContentGeneration(content, paperInfo);
+        //   console.log("$$$$$$$$$$$ DEBUG ###################");
+        //   console.log("$$$$$$$$$$$ DEBUG ###################");
+        //   console.log(continuationContent);
+        //   console.log("$$$$$$$$$$$ DEBUG ###################");
+        //   console.log("$$$$$$$$$$$ DEBUG ###################");
+        //   return content + continuationContent;
+        // }
         
         return content;
     } catch (error) {
@@ -236,7 +241,7 @@ Abstract: ${paperInfo.abstract}
 (論文の革新性や貢献度について200字程度で説明)
 
 ## 論文の内容
-(論文の手法、アルゴリズム、実験結果について4000字以上で詳しく説明。要約ではなく、論文に記載されている内容をそのまま詳細に記述してください。以下の要素を必ず含めてください：
+(論文の手法、アルゴリズム、実験結果について2000字以上で詳しく説明。要約ではなく、論文に記載されている内容をそのまま詳細に記述してください。以下の要素を必ず含めてください：
 
 ### 提案手法の詳細
 - アルゴリズムの具体的な手順
@@ -299,7 +304,7 @@ Abstract: ${paperInfo.abstract}
             }
           ],
           temperature: 0.7,
-          max_tokens: 4000
+          max_tokens: 16000
         });
 
         const basicContent = basicCompletion.choices[0].message.content || '';
@@ -310,8 +315,8 @@ Abstract: ${paperInfo.abstract}
         const detailedContent = await this.generateDetailedContent(paperInfo, evaluation);
         
         // 基本記事の「論文の内容」セクションを詳細版に置き換え
-        // const enhancedContent = this.replaceContentSection(basicContent, detailedContent);
-        const enhancedContent = basicContent;
+        const enhancedContent = await this.replaceContentSection(basicContent, detailedContent);
+        // const enhancedContent = basicContent;
         
         return enhancedContent;
 
@@ -352,7 +357,7 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
           }
         ],
         temperature: 0.7,
-        max_tokens: 8000
+        max_tokens: 16000
       });
 
       return completion.choices[0].message.content || '';
@@ -365,31 +370,146 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
   /**
    * 基本記事の論文の内容セクションを詳細版に置き換え
    */
-  private replaceContentSection(basicContent: string, detailedContent: string): string {
-    console.log("basic:", basicContent);
-    console.log("detailed:", detailedContent);
-    // 論文の内容セクションを見つけて置き換え
-    const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
-    const replacementSection = `## 論文の内容\n${detailedContent}\n\n`;
+  private async replaceContentSection(basicContent: string, detailedContent: string): Promise<string> {
     
-    if (contentSectionRegex.test(basicContent)) {
-      return basicContent.replace(contentSectionRegex, replacementSection);
-    } else {
-      // セクションが見つからない場合は、考察セクションの前に挿入
-      const considerationIndex = basicContent.indexOf('## 考察');
-      if (considerationIndex !== -1) {
-        return basicContent.slice(0, considerationIndex) + replacementSection + basicContent.slice(considerationIndex);
+    // OpenAI APIを使ってMarkdownからHTMLに変換
+    const htmlConversionPrompt = `以下のMarkdown形式のテキストを、適切なHTML形式に変換してください。
+
+Markdownテキスト:
+${detailedContent}
+
+要求事項:
+1. Markdownの構文（見出し、リスト、強調、リンク、コードブロックなど）を適切なHTMLタグに変換
+2. 数式（$...$や$$...$$）はそのまま保持
+3. 図表への言及（Figure 1、Table 2など）も保持
+4. HTMLタグのみを出力し、余計な説明は不要
+5. 段落は<p>タグで囲む
+6. 見出しは適切なレベルの<h>タグに変換
+
+HTML形式で出力してください:`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'あなたはMarkdownからHTMLへの変換を専門とするアシスタントです。正確で適切なHTML形式に変換してください。'
+          },
+          {
+            role: 'user',
+            content: htmlConversionPrompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 16000
+      });
+
+      const htmlContent = completion.choices[0].message.content || detailedContent;
+      console.log("converted to HTML:", htmlContent);
+      
+      // 論文の内容セクションを見つけて置き換え
+      // const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
+      const contentSectionRegex = /## 論文の内容[\s\S]*?(?=^##\s|\Z)/m;
+      const replacementSection = `## 論文の内容\n${htmlContent}\n\n`;
+      
+      if (contentSectionRegex.test(basicContent)) {
+        return basicContent.replace(contentSectionRegex, replacementSection);
+      // } else {
+      //   // セクションが見つからない場合は、考察セクションの前に挿入
+      //   const considerationIndex = basicContent.indexOf('## 考察');
+      //   if (considerationIndex !== -1) {
+      //     return basicContent.slice(0, considerationIndex) + replacementSection + basicContent.slice(considerationIndex);
+      //   } else {
+      //     // 考察セクションも見つからない場合は最後に追加
+      //     return basicContent + '\n\n' + replacementSection;
+      //   }
+      }
+    } catch (error) {
+      console.error('Error converting Markdown to HTML:', error);
+      // エラーの場合は元のMarkdownコンテンツをそのまま使用
+      const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
+      const replacementSection = `## 論文の内容\n${detailedContent}\n\n`;
+      
+      if (contentSectionRegex.test(basicContent)) {
+        return basicContent.replace(contentSectionRegex, replacementSection);
       } else {
-        // 考察セクションも見つからない場合は最後に追加
-        return basicContent + '\n\n' + replacementSection;
+        const considerationIndex = basicContent.indexOf('## 考察');
+        if (considerationIndex !== -1) {
+          return basicContent.slice(0, considerationIndex) + replacementSection + basicContent.slice(considerationIndex);
+        } else {
+          return basicContent + '\n\n' + replacementSection;
+        }
       }
     }
   }
 
   /**
+   * 論文の内容からFigure言及を抽出してimg tagを埋め込む
+   */
+  private async embedFiguresInContent(content: string, figures: Array<{figureNumber: string; caption: string; imageUrl?: string}>): Promise<string> {
+    if (!figures || figures.length === 0) {
+      console.log('No figures available for embedding');
+      return content;
+    }
+
+    let processedContent = content;
+    
+    try {
+      // Figure言及のパターンを検索（Figure 1, Fig. 2, Figure 3など）
+      const figureReferences = content.match(/(Figure\s+\d+|Fig\.\s*\d+)/gi) || [];
+      
+      console.log(`Found figure references in content: ${figureReferences.join(', ')}`);
+      
+      if (figureReferences.length === 0) {
+        console.log('No figure references found in content');
+        return content;
+      }
+      
+      // 重複を除去し、正規化
+      const uniqueReferences = [...new Set(figureReferences.map(ref => 
+        ref.replace(/Fig\.\s*/i, 'Figure ').replace(/\s+/g, ' ')
+      ))];
+      
+      console.log(`Processing unique figure references: ${uniqueReferences.join(', ')}`);
+      
+      for (const figureRef of uniqueReferences) {
+        // 対応するFigureデータを検索
+        const figureData = figures.find(fig => 
+          fig.figureNumber.toLowerCase().trim() === figureRef.toLowerCase().trim()
+        );
+        
+        if (figureData && figureData.imageUrl) {
+          // Figure言及の直後にimg tagを挿入（最初の出現のみ）
+          const figurePattern = new RegExp(`(${figureRef.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![^<]*<\/div>)`, 'i');
+          
+          const figureHtml = `$1
+
+<div class="figure-embed" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9;">
+  <img src="${figureData.imageUrl}" alt="${figureData.figureNumber}" style="max-width: 100%; height: auto; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" onerror="this.style.display='none'; this.nextElementSibling.innerHTML='<span style=\\"color: #999;\\">${figureData.imageUrl}</span>'" 
+  <p style="margin: 10px 0 0 0; font-size: 14px; color: #666; font-style: italic;">
+    <strong>${figureData.figureNumber}:</strong> ${figureData.caption}
+  </p>
+</div>`;
+          
+          processedContent = processedContent.replace(figurePattern, figureHtml);
+          console.log(`Embedded ${figureData.figureNumber} with URL: ${figureData.imageUrl}`);
+        } else {
+          console.log(`No image found for ${figureRef} (available figures: ${figures.map(f => f.figureNumber).join(', ')})`);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error embedding figures in content:', error);
+    }
+    
+    return processedContent;
+  }
+
+  /**
    * 生成されたコンテンツを構造化データに変換
    */
-  private parseArticleContent(content: string, paperInfo: PaperInfo): PaperArticle {
+  private async parseArticleContent(content: string, paperInfo: PaperInfo): Promise<PaperArticle> {
     const sections = {
       tldr: this.extractSection(content, 'TL;DR', '背景・目的'),
       background: this.extractSection(content, '背景・目的', 'この論文の良いところ'),
@@ -399,16 +519,40 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
       conclusion: this.extractSection(content, '結論・まとめ', null)
     };
 
+    // 図や表の情報を取得
+    let figures: Array<{figureNumber: string; caption: string; imageUrl?: string;}> = [];
+    let tables: Array<{tableNumber: string; caption: string; content: string; structuredData?: any}> = [];
+    
+    try {
+      const skipHtmlParsing = process.env.SKIP_HTML_PARSING === 'true';
+      if (!skipHtmlParsing) {
+        const htmlContent = await this.htmlParser.parsePaper(paperInfo.arxivId);
+        figures = htmlContent.figures;
+        tables = htmlContent.tables;
+        console.log(`Extracted ${figures.length} figures and ${tables.length} tables for ${paperInfo.arxivId}`);
+      }
+    } catch (error) {
+      console.warn(`Failed to extract figures and tables for ${paperInfo.arxivId}:`, error);
+    }
+
+    // 論文の内容セクションにFigureを埋め込む
+    let processedContent = sections.content || '内容セクションの抽出に失敗しました。';
+    if (figures.length > 0) {
+      processedContent = await this.embedFiguresInContent(processedContent, figures);
+    }
+
     return {
       paperId: paperInfo.arxivId,
       title: `【論文解説】${paperInfo.title}`,
       tldr: sections.tldr || 'TL;DRセクションの抽出に失敗しました。',
       background: sections.background || '背景・目的セクションの抽出に失敗しました。',
       goodPoints: sections.goodPoints || '良いところセクションの抽出に失敗しました。',
-      content: sections.content || '内容セクションの抽出に失敗しました。',
+      content: processedContent,
       consideration: sections.consideration || '考察セクションの抽出に失敗しました。',
       conclusion: sections.conclusion || '結論セクションの抽出に失敗しました。',
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
+      figures: figures,
+      tables: tables
     };
   }
 
@@ -445,9 +589,7 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
         console.log(articleContent);
         
         // 文字列コンテンツをPaperArticle形式に変換
-        const article = this.parseArticleContent(articleContent, result.paper);
-        console.log("ARTICLE #####################:", article);
-        console.log("ARTICLE CONTENT ##################:", articleContent);
+        const article = await this.parseArticleContent(articleContent, result.paper);
         
         articles.push({
           paper: result.paper,
@@ -466,27 +608,102 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
   }
 
   /**
+   * テキストコンテンツをHTML形式に変換
+   */
+  private async convertContentToHtml(content: string, sectionName: string = 'content'): Promise<string> {
+    const htmlConversionPrompt = `以下の論文解説コンテンツを、適切なHTML形式に変換してください。
+
+要求事項：
+1. 段落は<p>タグで囲む
+2. 見出しがあれば適切なh1-h6タグを使用
+3. 数式は既存の$記法を維持
+4. 既存のimg tagやdivタグは保持
+5. リストがある場合は<ul><li>または<ol><li>を使用
+6. 強調すべき部分は<strong>や<em>を使用
+7. 読みやすいHTML構造にする
+8. 不要な改行は削除し、適切な構造化を行う
+
+変換対象のコンテンツ：
+${content}
+
+注意：
+- HTMLタグのみを出力し、説明文は含めないでください
+- 既存のFigure埋め込み用のdivやimgタグは絶対に変更しないでください
+- 数式の$記法は変更しないでください`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'あなたは技術文書をHTML形式に変換する専門家です。与えられたテキストを適切なHTML構造に変換してください。'
+          },
+          {
+            role: 'user',
+            content: htmlConversionPrompt
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 8000
+      });
+
+      const htmlContent = completion.choices[0].message.content || content;
+      console.log(`Successfully converted ${sectionName} to HTML`);
+      return htmlContent;
+    } catch (error) {
+      console.error('Error converting content to HTML:', error);
+      // エラーの場合は元のコンテンツを返す
+      return content;
+    }
+  }
+
+  /**
    * MCP連携用のブログポスト形式に変換（将来の拡張用）
    */
-  async convertToBlogPost(articleResult: ArticleGenerationResult): Promise<BlogPost> {
+  async convertToBlogPost(articleResult: ArticleGenerationResult, convertAllToHtml: boolean = false): Promise<BlogPost> {
     const { paper, article, evaluation } = articleResult;
+    
+    // 論文の内容をHTML形式に変換
+    console.log('Converting article content to HTML...');
+    const htmlContent = await this.convertContentToHtml(article.content, 'article content');
+    
+    // オプション: 他のセクションもHTML化
+    let htmlBackground = article.background;
+    let htmlGoodPoints = article.goodPoints;
+    let htmlConsideration = article.consideration;
+    let htmlConclusion = article.conclusion;
+    
+    if (convertAllToHtml) {
+      console.log('Converting all sections to HTML...');
+      try {
+        [htmlBackground, htmlGoodPoints, htmlConsideration, htmlConclusion] = await Promise.all([
+          this.convertContentToHtml(article.background, 'background'),
+          this.convertContentToHtml(article.goodPoints, 'good points'),
+          this.convertContentToHtml(article.consideration, 'consideration'),
+          this.convertContentToHtml(article.conclusion, 'conclusion')
+        ]);
+      } catch (error) {
+        console.warn('Error converting some sections to HTML, using original content:', error);
+      }
+    }
     
     const blogContent = `${article.tldr}
 
 ## 背景・目的
-${article.background}
+${htmlBackground}
 
 ## この論文の良いところ
-${article.goodPoints}
+${htmlGoodPoints}
 
 ## 論文の内容
-${article.content}
+${htmlContent}
 
 ## 考察
-${article.consideration}
+${htmlConsideration}
 
 ## 結論・まとめ
-${article.conclusion}
+${htmlConclusion}
 
 ---
 **論文情報**

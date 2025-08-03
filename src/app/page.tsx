@@ -434,6 +434,10 @@ export default function Home() {
             <h4 className="font-semibold text-purple-700 mb-2">🎉 結論・まとめ</h4>
             <MathRenderer content={articleContent.conclusion} className="text-gray-700 leading-relaxed" />
           </div>
+
+
+
+
         </div>
 
         <div className="mt-4 pt-4 border-t border-purple-200">

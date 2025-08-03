@@ -2,7 +2,7 @@
 
 ## 概要
 
-Arxiv論文評価システムに、上位3件の論文について詳細な解説記事を自動生成する機能を追加しました。この機能は将来的にMCP（Model Context Protocol）と連携してブログへの自動投稿を可能にする拡張性を持っています。
+Arxiv論文評価システムに、上位3件の論文について詳細な解説記事を自動生成する機能を追加しました。この機能はArxivの公式HTMLページ（`https://arxiv.org/html/{arxivId}v1`）から論文内容を抽出することで、図表の引用を容易にし、より精度の高い記事生成を実現しています。将来的にMCP（Model Context Protocol）と連携してブログへの自動投稿を可能にする拡張性を持っています。
 
 ## 機能詳細
 
@@ -46,10 +46,12 @@ Arxiv論文評価システムに、上位3件の論文について詳細な解�
    - KaTeXを使用した数式レンダリングコンポーネント
    - LaTeX形式の数式を美しく表示
 
-5. **`src/lib/pdfParser.ts`**
-   - arXiv PDFから実際の論文内容を抽出
+5. **`src/lib/arxivHtmlParser.ts`**
+   - Arxiv公式HTMLページから実際の論文内容を抽出
    - 図表キャプション、数式、セクション内容を解析
-   - pdf-parseライブラリを使用した実装
+   - cheerioライブラリを使用したHTML解析実装
+   - PDFより図表の引用が容易で精度が高い
+   - `https://arxiv.org/html/{arxivId}v1`形式のURLに対応
 
 ### 型定義の追加
 
@@ -109,19 +111,26 @@ export interface BlogPost {
    - 記事の編集・更新
    - プレビュー機能
 
-### 環境変数設定（将来の実装用）
+### 環境変数設定
 
 ```env
-# MCP連携設定
+# HTML解析設定
+SKIP_HTML_PARSING=false  # trueに設定するとHTML解析をスキップしてAbstractベースの生成を使用
+
+# OpenAI API設定
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_API_BASE=https://api.openai.com/v1  # カスタムエンドポイントがある場合
+
+# MCP連携設定（将来の実装用）
 MCP_ENDPOINT=https://your-mcp-server.com
 MCP_API_KEY=your-mcp-api-key
 
-# WordPress連携
+# WordPress連携（将来の実装用）
 WORDPRESS_ENDPOINT=https://your-wordpress-site.com/wp-json/wp/v2
 WORDPRESS_USERNAME=your-username
 WORDPRESS_APP_PASSWORD=your-app-password
 
-# Notion連携
+# Notion連携（将来の実装用）
 NOTION_API_KEY=your-notion-api-key
 NOTION_DATABASE_ID=your-database-id
 ```
