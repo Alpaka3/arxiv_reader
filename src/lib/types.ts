@@ -96,7 +96,40 @@ export interface EvaluationRequest {
   arxivUrl: string;
 }
 
-// MCP連携用のブログポスト型定義（将来の拡張用）
+// WordPress REST API用の型定義
+export interface WordPressPost {
+  title: string;
+  content: string;
+  status: 'draft' | 'publish' | 'private';
+  tags?: string;
+  categories?: string[];
+  excerpt?: string;
+  meta?: {
+    [key: string]: any;
+  };
+}
+
+export interface WordPressResponse {
+  success: boolean;
+  postId?: number;
+  postUrl?: string;
+  error?: string;
+}
+
+export interface WordPressConfig {
+  endpoint: string;
+  username: string;
+  appPassword: string;
+}
+
+export interface WordPressSiteInfo {
+  name: string;
+  description: string;
+  url: string;
+  wpVersion: string;
+}
+
+// MCP連携用のブログポスト型定義（互換性のため残存）
 export interface BlogPost {
   id: string;
   title: string;

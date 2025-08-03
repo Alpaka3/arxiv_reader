@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { EvaluationResponse, DateEvaluationResponse, PaperEvaluationResult, ArticleGenerationResult } from '@/lib/types';
 import MathRenderer from '@/components/MathRenderer';
+import WordPressPublishButton from '@/components/WordPressPublishButton';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'single' | 'date'>('single');
@@ -459,6 +460,15 @@ export default function Home() {
             </div>
           </details>
         </div>
+
+        {/* WordPress投稿ボタン */}
+        <WordPressPublishButton 
+          articleResult={{
+            paper: result.paper,
+            article: articleContent,
+            evaluation: evaluation
+          }}
+        />
       </div>
     );
   }
