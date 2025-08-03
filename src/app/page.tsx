@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { EvaluationResponse, DateEvaluationResponse, PaperEvaluationResult, ArticleGenerationResult } from '@/lib/types';
 import MathRenderer from '@/components/MathRenderer';
-import { TableRenderer } from '@/components/TableRenderer';
+import { FigureRenderer } from '@/components/FigureRenderer';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'single' | 'date'>('single');
@@ -439,44 +439,19 @@ export default function Home() {
           {/* 図の表示セクション */}
           {articleContent.figures && articleContent.figures.length > 0 && (
             <div className="p-4 bg-white rounded-lg border border-purple-100">
-              <h4 className="font-semibold text-purple-700 mb-4">🖼️ 論文の図表</h4>
-              <div className="space-y-4">
+              <h4 className="font-semibold text-purple-700 mb-4">🖼️ 論文の図</h4>
+              <div className="mb-3 text-sm text-gray-600">
+                📸 論文から抽出された図を表示しています。拡大表示やダウンロードも可能です。
+              </div>
+              <div className="space-y-6">
                 {articleContent.figures.map((figure, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                    <h5 className="font-medium text-gray-800 mb-2">{figure.figureNumber}</h5>
-                    {figure.imageUrl && (
-                      <div className="mb-3">
-                        <img 
-                          src={figure.imageUrl} 
-                          alt={figure.figureNumber}
-                          className="max-w-full h-auto rounded border"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                      </div>
-                    )}
-                    <p className="text-sm text-gray-600">{figure.caption}</p>
-                  </div>
+                  <FigureRenderer key={index} figure={figure} index={index} />
                 ))}
               </div>
             </div>
           )}
 
-          {/* 表の表示セクション */}
-          {articleContent.tables && articleContent.tables.length > 0 && (
-            <div className="p-4 bg-white rounded-lg border border-purple-100">
-              <h4 className="font-semibold text-purple-700 mb-4">📊 論文の表</h4>
-              <div className="mb-3 text-sm text-gray-600">
-                💡 表が崩れて見にくい場合は「画像で表示」ボタンをクリックして画像形式で表示できます
-              </div>
-              <div className="space-y-4">
-                {articleContent.tables.map((table, index) => (
-                  <TableRenderer key={index} table={table} index={index} defaultAsImage={false} />
-                ))}
-              </div>
-            </div>
-          )}
+
         </div>
 
         <div className="mt-4 pt-4 border-t border-purple-200">

@@ -169,6 +169,42 @@ export class ArxivHtmlParser {
         console.log(`Found figure from alt text: ${figureMatch[1]} - ${figureMatch[2]?.substring(0, 50)}...`);
       }
     });
+
+    // 5. すべての画像要素をチェックして、図表番号がないものも収集
+    $('img').each((_, element) => {
+      const $img = $(element);
+      let imageUrl = $img.attr('src');
+      
+      if (imageUrl && !imageUrl.startsWith('http')) {
+        imageUrl = `https://arxiv.org${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+      }
+      
+      // 既に収集された図表と重複していないかチェック
+      if (imageUrl && !figures.some(f => f.imageUrl === imageUrl)) {
+        // 周辺のテキストから図表番号を探す
+        const $parent = $img.closest('div, figure, p');
+        const parentText = $parent.text();
+        const figureMatch = parentText.match(/(Figure\s+\d+|Fig\.\s*\d+)[:\.]?\s*([^\n.]{0,100})/i);
+        
+        if (figureMatch) {
+          figures.push({
+            figureNumber: figureMatch[1].replace(/Fig\.\s*/i, 'Figure '),
+            caption: figureMatch[2]?.trim() || 'Caption not available',
+            imageUrl: imageUrl
+          });
+          console.log(`Found additional figure: ${figureMatch[1]} - ${imageUrl}`);
+        } else {
+          // 図表番号が見つからない場合でも、画像が論文の図である可能性があるので収集
+          const figureCount = figures.length + 1;
+          figures.push({
+            figureNumber: `Figure ${figureCount}`,
+            caption: 'Caption extracted from surrounding text not available',
+            imageUrl: imageUrl
+          });
+          console.log(`Found unlabeled figure: Figure ${figureCount} - ${imageUrl}`);
+        }
+      }
+    });
     
     console.log(`Total figures extracted: ${figures.length}`);
     return figures;
