@@ -171,7 +171,7 @@ ${realContent.tableList ? `実際のTables: ${realContent.tableList}` : ''}
 
           try {
         const completion = await this.openai.chat.completions.create({
-          model: 'gpt-4o-mini', // より強力なモデルを使用
+          model: 'gpt-4o', // より強力なモデルを使用
           messages: [
             {
               role: 'system',
@@ -299,7 +299,7 @@ Abstract: ${paperInfo.abstract}
             }
           ],
           temperature: 0.7,
-          max_tokens: 4000
+          max_tokens: 16000
         });
 
         const basicContent = basicCompletion.choices[0].message.content || '';
@@ -310,8 +310,8 @@ Abstract: ${paperInfo.abstract}
         const detailedContent = await this.generateDetailedContent(paperInfo, evaluation);
         
         // 基本記事の「論文の内容」セクションを詳細版に置き換え
-        // const enhancedContent = this.replaceContentSection(basicContent, detailedContent);
-        const enhancedContent = basicContent;
+        const enhancedContent = this.replaceContentSection(basicContent, detailedContent);
+        // const enhancedContent = basicContent;
         
         return enhancedContent;
 
@@ -352,7 +352,7 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
           }
         ],
         temperature: 0.7,
-        max_tokens: 8000
+        max_tokens: 16000
       });
 
       return completion.choices[0].message.content || '';
