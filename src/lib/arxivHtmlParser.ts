@@ -540,9 +540,9 @@ export class ArxivHtmlParser {
       console.log(`Extracted content: ${figures.length} figures, ${tables.length} tables, ${equations.length} equations`);
       figures.forEach((figure, index) => {
         console.log(`Figure ${index + 1}:`);
+        console.log(` - Number: ${figure.figureNumber}`);
         console.log(` - Caption: ${figure.caption}`);
-        console.log(` - Src: ${figure.src}`);
-        console.log(` - Alt: ${figure.alt}`);
+        console.log(` - ImageURL: ${figure.imageUrl || 'No image'}`);
       });
 
       

@@ -389,7 +389,7 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
   /**
    * 生成されたコンテンツを構造化データに変換
    */
-  private parseArticleContent(content: string, paperInfo: PaperInfo): PaperArticle {
+  private async parseArticleContent(content: string, paperInfo: PaperInfo): Promise<PaperArticle> {
     const sections = {
       tldr: this.extractSection(content, 'TL;DR', '背景・目的'),
       background: this.extractSection(content, '背景・目的', 'この論文の良いところ'),
@@ -398,6 +398,22 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
       consideration: this.extractSection(content, '考察', '結論・まとめ'),
       conclusion: this.extractSection(content, '結論・まとめ', null)
     };
+
+    // 図や表の情報を取得
+    let figures: Array<{figureNumber: string; caption: string; imageUrl?: string;}> = [];
+    let tables: Array<{tableNumber: string; caption: string; content: string; structuredData?: any}> = [];
+    
+    try {
+      const skipHtmlParsing = process.env.SKIP_HTML_PARSING === 'true';
+      if (!skipHtmlParsing) {
+        const htmlContent = await this.htmlParser.parsePaper(paperInfo.arxivId);
+        figures = htmlContent.figures;
+        tables = htmlContent.tables;
+        console.log(`Extracted ${figures.length} figures and ${tables.length} tables for ${paperInfo.arxivId}`);
+      }
+    } catch (error) {
+      console.warn(`Failed to extract figures and tables for ${paperInfo.arxivId}:`, error);
+    }
 
     return {
       paperId: paperInfo.arxivId,
@@ -408,7 +424,9 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
       content: sections.content || '内容セクションの抽出に失敗しました。',
       consideration: sections.consideration || '考察セクションの抽出に失敗しました。',
       conclusion: sections.conclusion || '結論セクションの抽出に失敗しました。',
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
+      figures: figures,
+      tables: tables
     };
   }
 
@@ -445,7 +463,7 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
         console.log(articleContent);
         
         // 文字列コンテンツをPaperArticle形式に変換
-        const article = this.parseArticleContent(articleContent, result.paper);
+        const article = await this.parseArticleContent(articleContent, result.paper);
         console.log("ARTICLE #####################:", article);
         console.log("ARTICLE CONTENT ##################:", articleContent);
         

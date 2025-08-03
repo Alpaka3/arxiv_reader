@@ -434,6 +434,88 @@ export default function Home() {
             <h4 className="font-semibold text-purple-700 mb-2">🎉 結論・まとめ</h4>
             <MathRenderer content={articleContent.conclusion} className="text-gray-700 leading-relaxed" />
           </div>
+
+          {/* 図の表示セクション */}
+          {articleContent.figures && articleContent.figures.length > 0 && (
+            <div className="p-4 bg-white rounded-lg border border-purple-100">
+              <h4 className="font-semibold text-purple-700 mb-4">🖼️ 論文の図表</h4>
+              <div className="space-y-4">
+                {articleContent.figures.map((figure, index) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <h5 className="font-medium text-gray-800 mb-2">{figure.figureNumber}</h5>
+                    {figure.imageUrl && (
+                      <div className="mb-3">
+                        <img 
+                          src={figure.imageUrl} 
+                          alt={figure.figureNumber}
+                          className="max-w-full h-auto rounded border"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                    <p className="text-sm text-gray-600">{figure.caption}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 表の表示セクション */}
+          {articleContent.tables && articleContent.tables.length > 0 && (
+            <div className="p-4 bg-white rounded-lg border border-purple-100">
+              <h4 className="font-semibold text-purple-700 mb-4">📊 論文の表</h4>
+              <div className="space-y-4">
+                {articleContent.tables.map((table, index) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <h5 className="font-medium text-gray-800 mb-2">{table.tableNumber}</h5>
+                    <p className="text-sm text-gray-600 mb-3">{table.caption}</p>
+                    
+                    {/* 構造化されたテーブルデータがある場合 */}
+                    {table.structuredData && table.structuredData.headers && table.structuredData.headers.length > 0 && (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full border border-gray-300 text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              {table.structuredData.headers.map((header, headerIndex) => (
+                                <th key={headerIndex} className="border border-gray-300 px-3 py-2 text-left font-medium text-gray-700">
+                                  {header}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {table.structuredData.rows.slice(0, 10).map((row, rowIndex) => (
+                              <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                {row.map((cell, cellIndex) => (
+                                  <td key={cellIndex} className="border border-gray-300 px-3 py-2 text-gray-700">
+                                    {cell}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {table.structuredData.rows.length > 10 && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            （最初の10行のみ表示。全{table.structuredData.rows.length}行）
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* 構造化データがない場合は生のテキストを表示 */}
+                    {(!table.structuredData || !table.structuredData.headers || table.structuredData.headers.length === 0) && (
+                      <pre className="text-xs text-gray-700 bg-gray-50 p-3 rounded overflow-x-auto whitespace-pre-wrap">
+                        {table.content}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 pt-4 border-t border-purple-200">

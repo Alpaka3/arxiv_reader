@@ -48,6 +48,22 @@ export interface PaperArticle {
   consideration: string;
   conclusion: string;
   generatedAt: string;
+  // 図と表の情報を追加
+  figures?: Array<{
+    figureNumber: string;
+    caption: string;
+    imageUrl?: string;
+  }>;
+  tables?: Array<{
+    tableNumber: string;
+    caption: string;
+    content: string;
+    structuredData?: {
+      headers: string[];
+      rows: string[][];
+      textContent: string;
+    };
+  }>;
 }
 
 // 論文解説記事生成結果の型定義
