@@ -76,9 +76,11 @@ export class ArxivPaperEvaluator {
    * 指定日付のarXiv論文リストを取得
    */
   async fetchPapersByDate(date: string, isDebugMode: boolean = true): Promise<PaperInfo[]> {
-    const categories = ['cs.AI', 'cs.CV', 'cs.LG'];
+    // const categories = ['cs.AI', 'cs.CV', 'cs.LG'];
+    const categories = ['cs.AI'];
     const papers: PaperInfo[] = [];
-    const maxPapersPerCategory = isDebugMode ? 3 : Infinity;
+    // const maxPapersPerCategory = isDebugMode ? 3 : Infinity;
+    const maxPapersPerCategory = isDebugMode ? 1 : Infinity;
   
     for (const category of categories) {
       let start = 0;
