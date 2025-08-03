@@ -366,4 +366,27 @@ export class Ar5ivParser {
       fullSections: content.sections
     };
   }
+
+  /**
+   * 論文のサマリー情報を取得（PDFパーサーとの互換性のため）
+   */
+  async getPaperSummary(arxivId: string): Promise<{
+    methodology: string;
+    experiments: string;
+    results: string;
+    figureList: string;
+    tableList: string;
+    equationList: string;
+  }> {
+    const content = await this.parsePaper(arxivId);
+    
+    return {
+      methodology: content.methodology,
+      experiments: content.experiments,
+      results: content.results,
+      figureList: content.figures.map(f => `${f.figureNumber}: ${f.caption}`).join('\n'),
+      tableList: content.tables.map(t => `${t.tableNumber}: ${t.caption}`).join('\n'),
+      equationList: content.equations.slice(0, 10).map(e => e.equation).join('\n') // 最初の10個の数式
+    };
+  }
 }

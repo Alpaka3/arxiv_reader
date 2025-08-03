@@ -1,17 +1,17 @@
 import OpenAI from 'openai';
 import { PaperInfo, EvaluationResult, PaperArticle, ArticleGenerationResult, BlogPost } from './types';
-import { ArxivPdfParser } from './pdfParser';
+import { Ar5ivParser } from './ar5ivParser';
 
 export class PaperArticleGenerator {
   private openai: OpenAI;
-  private pdfParser: ArxivPdfParser;
+  private htmlParser: Ar5ivParser;
 
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       baseURL: process.env.OPENAI_API_BASE,
     });
-    this.pdfParser = new ArxivPdfParser();
+    this.htmlParser = new Ar5ivParser();
   }
 
   /**
@@ -54,31 +54,31 @@ export class PaperArticleGenerator {
    * 論文の内容セクション専用の詳細生成（実際の論文内容を使用）
    */
   private async generateDetailedContent(paperInfo: PaperInfo, evaluation: EvaluationResult): Promise<string> {
-    // PDFから実際の論文内容を取得（環境変数でスキップ可能）
+    // HTMLから実際の論文内容を取得（環境変数でスキップ可能）
     let realContent;
-    const skipPdfParsing = process.env.SKIP_PDF_PARSING === 'true';
+    const skipHtmlParsing = process.env.SKIP_HTML_PARSING === 'true';
     
-    if (skipPdfParsing) {
-      console.log(`PDF parsing is disabled, using abstract-based generation for ${paperInfo.arxivId}`);
+    if (skipHtmlParsing) {
+      console.log(`HTML parsing is disabled, using abstract-based generation for ${paperInfo.arxivId}`);
       realContent = {
-        methodology: 'PDF parsing disabled - using abstract-based generation',
-        experiments: 'PDF parsing disabled - using abstract-based generation',
-        results: 'PDF parsing disabled - using abstract-based generation',
+        methodology: 'HTML parsing disabled - using abstract-based generation',
+        experiments: 'HTML parsing disabled - using abstract-based generation',
+        results: 'HTML parsing disabled - using abstract-based generation',
         figureList: '',
         tableList: '',
         equationList: ''
       };
     } else {
       try {
-        console.log(`Fetching real content from PDF for ${paperInfo.arxivId}`);
-        realContent = await this.pdfParser.getPaperSummary(paperInfo.arxivId);
-        console.log(`PDF content extracted successfully for ${paperInfo.arxivId}`);
+        console.log(`Fetching real content from HTML for ${paperInfo.arxivId}`);
+        realContent = await this.htmlParser.getPaperSummary(paperInfo.arxivId);
+        console.log(`HTML content extracted successfully for ${paperInfo.arxivId}`);
       } catch (error) {
-        console.warn(`Failed to fetch PDF content for ${paperInfo.arxivId}, using fallback:`, error);
+        console.warn(`Failed to fetch HTML content for ${paperInfo.arxivId}, using fallback:`, error);
         realContent = {
-          methodology: 'PDF parsing failed - using abstract-based generation',
-          experiments: 'PDF parsing failed - using abstract-based generation',
-          results: 'PDF parsing failed - using abstract-based generation',
+          methodology: 'HTML parsing failed - using abstract-based generation',
+          experiments: 'HTML parsing failed - using abstract-based generation',
+          results: 'HTML parsing failed - using abstract-based generation',
           figureList: '',
           tableList: '',
           equationList: ''
@@ -95,8 +95,8 @@ arXiv ID: ${paperInfo.arxivId}
 Abstract: ${paperInfo.abstract}
 
 【実際の論文内容】:
-${realContent.methodology.includes('PDF parsing') 
-  ? `PDF解析が利用できないため、以下のAbstractを基に詳細な技術解説を生成してください：
+${realContent.methodology.includes('HTML parsing') 
+  ? `HTML解析が利用できないため、以下のAbstractを基に詳細な技術解説を生成してください：
 Abstract: ${paperInfo.abstract}
 
 注意：実際の論文内容は利用できませんが、Abstractの情報から論理的に推測される手法、実験設定、結果について詳細に記述してください。`
@@ -114,7 +114,7 @@ ${realContent.tableList || 'No tables detected'}
 
 Equations (samples):
 ${realContent.equationList || 'No equations detected'}`
-  : `PDF解析により図表情報を取得できませんでした。論文の分野（${paperInfo.subjects.join(', ')}）に基づいて、典型的な図表を推測して引用してください。`}
+  : `HTML解析により図表情報を取得できませんでした。論文の分野（${paperInfo.subjects.join(', ')}）に基づいて、典型的な図表を推測して引用してください。`}
 
 【重要】図表引用の必須要件：
 上記の【実際の図表リスト】に記載されている図表を積極的に引用してください。図表が検出されない場合は、以下の典型的な図表があるものとして引用してください：
