@@ -38,11 +38,35 @@ export interface ArxivHtmlContent {
 }
 
 export class ArxivHtmlParser {
+  private currentArxivId: string = '';
+
   /**
    * arXiv IDからArxivの公式HTMLページのURLを生成
    */
   private generateArxivHtmlUrl(arxivId: string): string {
     return `https://arxiv.org/html/${arxivId}v1`;
+  }
+
+  /**
+   * 相対パスを絶対パスに変換（ArXiv ID付きのパス構造）
+   */
+  private resolveImageUrl(imageSrc: string): string {
+    if (!imageSrc) return '';
+    
+    // すでに絶対URLの場合はそのまま返す
+    if (imageSrc.startsWith('http')) {
+      return imageSrc;
+    }
+    
+    // 相対パスの場合、ArXiv IDを含むパス構造で構築
+    if (this.currentArxivId) {
+      // パスの先頭の/を除去
+      const cleanPath = imageSrc.startsWith('/') ? imageSrc.substring(1) : imageSrc;
+      return `https://arxiv.org/html/${this.currentArxivId}v1/${cleanPath}`;
+    }
+    
+    // フォールバック（従来の方式）
+    return `https://arxiv.org${imageSrc.startsWith('/') ? '' : '/'}${imageSrc}`;
   }
 
   /**
@@ -88,18 +112,15 @@ export class ArxivHtmlParser {
         const figureMatch = captionText.match(/^(Figure\s+\d+)[:\.]?\s*(.*)/i);
         
         if (figureMatch) {
-          let imageUrl = $img.attr('src');
-          // 相対パスを絶対パスに変換
-          if (imageUrl && !imageUrl.startsWith('http')) {
-            imageUrl = `https://arxiv.org${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
-          }
+          const imageSrc = $img.attr('src');
+          const imageUrl = imageSrc ? this.resolveImageUrl(imageSrc) : undefined;
           
           figures.push({
             figureNumber: figureMatch[1],
             caption: figureMatch[2] || captionText,
-            imageUrl: imageUrl || undefined
+            imageUrl: imageUrl
           });
-          console.log(`Found figure: ${figureMatch[1]} - ${figureMatch[2]?.substring(0, 50)}...`);
+          console.log(`Found figure: ${figureMatch[1]} - ${imageUrl} - ${figureMatch[2]?.substring(0, 50)}...`);
         }
       }
     });
@@ -112,17 +133,15 @@ export class ArxivHtmlParser {
       
       if (figureMatch && !figures.some(f => f.figureNumber === figureMatch[1])) {
         const $img = $div.find('img');
-        let imageUrl = $img.attr('src');
-        if (imageUrl && !imageUrl.startsWith('http')) {
-          imageUrl = `https://arxiv.org${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
-        }
+        const imageSrc = $img.attr('src');
+        const imageUrl = imageSrc ? this.resolveImageUrl(imageSrc) : undefined;
         
         figures.push({
           figureNumber: figureMatch[1],
           caption: figureMatch[2].trim(),
-          imageUrl: imageUrl || undefined
+          imageUrl: imageUrl
         });
-        console.log(`Found LaTeX figure: ${figureMatch[1]} - ${figureMatch[2]?.substring(0, 50)}...`);
+        console.log(`Found LaTeX figure: ${figureMatch[1]} - ${imageUrl} - ${figureMatch[2]?.substring(0, 50)}...`);
       }
     });
     
@@ -135,17 +154,15 @@ export class ArxivHtmlParser {
       if (figureMatch && !figures.some(f => f.figureNumber === figureMatch[1])) {
         // 近くの画像を探す
         const $img = $elem.find('img').first() || $elem.siblings().find('img').first() || $elem.next().find('img').first();
-        let imageUrl = $img.attr('src');
-        if (imageUrl && !imageUrl.startsWith('http')) {
-          imageUrl = `https://arxiv.org${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
-        }
+        const imageSrc = $img.attr('src');
+        const imageUrl = imageSrc ? this.resolveImageUrl(imageSrc) : undefined;
         
         figures.push({
           figureNumber: figureMatch[1],
           caption: figureMatch[2].trim(),
-          imageUrl: imageUrl || undefined
+          imageUrl: imageUrl
         });
-        console.log(`Found additional figure: ${figureMatch[1]} - ${figureMatch[2]?.substring(0, 50)}...`);
+        console.log(`Found additional figure: ${figureMatch[1]} - ${imageUrl} - ${figureMatch[2]?.substring(0, 50)}...`);
       }
     });
     
@@ -156,28 +173,23 @@ export class ArxivHtmlParser {
       const figureMatch = altText.match(/(Figure\s+\d+|Fig\.\s*\d+)[:\.]?\s*(.*)/i);
       
       if (figureMatch && !figures.some(f => f.figureNumber.toLowerCase().includes(figureMatch[1].toLowerCase()))) {
-        let imageUrl = $img.attr('src');
-        if (imageUrl && !imageUrl.startsWith('http')) {
-          imageUrl = `https://arxiv.org${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
-        }
+        const imageSrc = $img.attr('src');
+        const imageUrl = imageSrc ? this.resolveImageUrl(imageSrc) : undefined;
         
         figures.push({
           figureNumber: figureMatch[1].replace(/Fig\.\s*/i, 'Figure '),
           caption: figureMatch[2] || altText,
-          imageUrl: imageUrl || undefined
+          imageUrl: imageUrl
         });
-        console.log(`Found figure from alt text: ${figureMatch[1]} - ${figureMatch[2]?.substring(0, 50)}...`);
+        console.log(`Found figure from alt text: ${figureMatch[1]} - ${imageUrl} - ${figureMatch[2]?.substring(0, 50)}...`);
       }
     });
 
     // 5. すべての画像要素をチェックして、図表番号がないものも収集
     $('img').each((_, element) => {
       const $img = $(element);
-      let imageUrl = $img.attr('src');
-      
-      if (imageUrl && !imageUrl.startsWith('http')) {
-        imageUrl = `https://arxiv.org${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
-      }
+      const imageSrc = $img.attr('src');
+      const imageUrl = imageSrc ? this.resolveImageUrl(imageSrc) : '';
       
       // 既に収集された図表と重複していないかチェック
       if (imageUrl && !figures.some(f => f.imageUrl === imageUrl)) {
@@ -557,6 +569,9 @@ export class ArxivHtmlParser {
    */
   async parsePaper(arxivId: string): Promise<ArxivHtmlContent> {
     try {
+      // 現在のArXiv IDを設定（画像URL構築用）
+      this.currentArxivId = arxivId;
+      
       const html = await this.fetchArxivHtml(arxivId);
       const $ = cheerio.load(html);
       
