@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { EvaluationResponse, DateEvaluationResponse, PaperEvaluationResult, ArticleGenerationResult } from '@/lib/types';
 import MathRenderer from '@/components/MathRenderer';
-import { FigureRenderer } from '@/components/FigureRenderer';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'single' | 'date'>('single');
@@ -436,20 +435,7 @@ export default function Home() {
             <MathRenderer content={articleContent.conclusion} className="text-gray-700 leading-relaxed" />
           </div>
 
-          {/* 図の表示セクション */}
-          {articleContent.figures && articleContent.figures.length > 0 && (
-            <div className="p-4 bg-white rounded-lg border border-purple-100">
-              <h4 className="font-semibold text-purple-700 mb-4">🖼️ 論文の図</h4>
-              <div className="mb-3 text-sm text-gray-600">
-                📸 論文から抽出された図を表示しています。拡大表示やダウンロードも可能です。
-              </div>
-              <div className="space-y-6">
-                {articleContent.figures.map((figure, index) => (
-                  <FigureRenderer key={index} figure={figure} index={index} />
-                ))}
-              </div>
-            </div>
-          )}
+
 
 
         </div>

@@ -387,6 +387,68 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
   }
 
   /**
+   * 論文の内容からFigure言及を抽出してimg tagを埋め込む
+   */
+  private async embedFiguresInContent(content: string, figures: Array<{figureNumber: string; caption: string; imageUrl?: string}>): Promise<string> {
+    if (!figures || figures.length === 0) {
+      console.log('No figures available for embedding');
+      return content;
+    }
+
+    let processedContent = content;
+    
+    try {
+      // Figure言及のパターンを検索（Figure 1, Fig. 2, Figure 3など）
+      const figureReferences = content.match(/(Figure\s+\d+|Fig\.\s*\d+)/gi) || [];
+      
+      console.log(`Found figure references in content: ${figureReferences.join(', ')}`);
+      
+      if (figureReferences.length === 0) {
+        console.log('No figure references found in content');
+        return content;
+      }
+      
+      // 重複を除去し、正規化
+      const uniqueReferences = [...new Set(figureReferences.map(ref => 
+        ref.replace(/Fig\.\s*/i, 'Figure ').replace(/\s+/g, ' ')
+      ))];
+      
+      console.log(`Processing unique figure references: ${uniqueReferences.join(', ')}`);
+      
+      for (const figureRef of uniqueReferences) {
+        // 対応するFigureデータを検索
+        const figureData = figures.find(fig => 
+          fig.figureNumber.toLowerCase().trim() === figureRef.toLowerCase().trim()
+        );
+        
+        if (figureData && figureData.imageUrl) {
+          // Figure言及の直後にimg tagを挿入（最初の出現のみ）
+          const figurePattern = new RegExp(`(${figureRef.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![^<]*<\/div>)`, 'i');
+          
+          const figureHtml = `$1
+
+<div class="figure-embed" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9;">
+  <img src="${figureData.imageUrl}" alt="${figureData.figureNumber}" style="max-width: 100%; height: auto; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" onerror="this.style.display='none'; this.nextElementSibling.innerHTML='<span style=\\"color: #999;\\">画像の読み込みに失敗しました: ${figureData.imageUrl}</span>'" />
+  <p style="margin: 10px 0 0 0; font-size: 14px; color: #666; font-style: italic;">
+    <strong>${figureData.figureNumber}:</strong> ${figureData.caption}
+  </p>
+</div>`;
+          
+          processedContent = processedContent.replace(figurePattern, figureHtml);
+          console.log(`Embedded ${figureData.figureNumber} with URL: ${figureData.imageUrl}`);
+        } else {
+          console.log(`No image found for ${figureRef} (available figures: ${figures.map(f => f.figureNumber).join(', ')})`);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error embedding figures in content:', error);
+    }
+    
+    return processedContent;
+  }
+
+  /**
    * 生成されたコンテンツを構造化データに変換
    */
   private async parseArticleContent(content: string, paperInfo: PaperInfo): Promise<PaperArticle> {
@@ -415,13 +477,19 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
       console.warn(`Failed to extract figures and tables for ${paperInfo.arxivId}:`, error);
     }
 
+    // 論文の内容セクションにFigureを埋め込む
+    let processedContent = sections.content || '内容セクションの抽出に失敗しました。';
+    if (figures.length > 0) {
+      processedContent = await this.embedFiguresInContent(processedContent, figures);
+    }
+
     return {
       paperId: paperInfo.arxivId,
       title: `【論文解説】${paperInfo.title}`,
       tldr: sections.tldr || 'TL;DRセクションの抽出に失敗しました。',
       background: sections.background || '背景・目的セクションの抽出に失敗しました。',
       goodPoints: sections.goodPoints || '良いところセクションの抽出に失敗しました。',
-      content: sections.content || '内容セクションの抽出に失敗しました。',
+      content: processedContent,
       consideration: sections.consideration || '考察セクションの抽出に失敗しました。',
       conclusion: sections.conclusion || '結論セクションの抽出に失敗しました。',
       generatedAt: new Date().toISOString(),
