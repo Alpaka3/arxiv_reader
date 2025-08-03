@@ -1,7 +1,6 @@
 import OpenAI from 'openai';
 import { PaperInfo, EvaluationResult, PaperArticle, ArticleGenerationResult, BlogPost } from './types';
 import { ArxivHtmlParser } from './arxivHtmlParser';
-import { marked } from 'marked';
 
 export class PaperArticleGenerator {
   private openai: OpenAI;
@@ -312,7 +311,7 @@ Abstract: ${paperInfo.abstract}
         const detailedContent = await this.generateDetailedContent(paperInfo, evaluation);
         
         // 基本記事の「論文の内容」セクションを詳細版に置き換え
-        const enhancedContent = this.replaceContentSection(basicContent, detailedContent);
+        const enhancedContent = await this.replaceContentSection(basicContent, detailedContent);
         // const enhancedContent = basicContent;
         
         return enhancedContent;
@@ -367,28 +366,77 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
   /**
    * 基本記事の論文の内容セクションを詳細版に置き換え
    */
-  private replaceContentSection(basicContent: string, detailedContent: string): string {
+  private async replaceContentSection(basicContent: string, detailedContent: string): Promise<string> {
     console.log("basic:", basicContent);
     console.log("detailed:", detailedContent);
     
-    // MarkdownからHTMLに変換
-    const htmlContent = marked(detailedContent);
-    console.log("converted to HTML:", htmlContent);
-    
-    // 論文の内容セクションを見つけて置き換え
-    const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
-    const replacementSection = `## 論文の内容\n${htmlContent}\n\n`;
-    
-    if (contentSectionRegex.test(basicContent)) {
-      return basicContent.replace(contentSectionRegex, replacementSection);
-    } else {
-      // セクションが見つからない場合は、考察セクションの前に挿入
-      const considerationIndex = basicContent.indexOf('## 考察');
-      if (considerationIndex !== -1) {
-        return basicContent.slice(0, considerationIndex) + replacementSection + basicContent.slice(considerationIndex);
+    // OpenAI APIを使ってMarkdownからHTMLに変換
+    const htmlConversionPrompt = `以下のMarkdown形式のテキストを、適切なHTML形式に変換してください。
+
+Markdownテキスト:
+${detailedContent}
+
+要求事項:
+1. Markdownの構文（見出し、リスト、強調、リンク、コードブロックなど）を適切なHTMLタグに変換
+2. 数式（$...$や$$...$$）はそのまま保持
+3. 図表への言及（Figure 1、Table 2など）も保持
+4. HTMLタグのみを出力し、余計な説明は不要
+5. 段落は<p>タグで囲む
+6. 見出しは適切なレベルの<h>タグに変換
+
+HTML形式で出力してください:`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'あなたはMarkdownからHTMLへの変換を専門とするアシスタントです。正確で適切なHTML形式に変換してください。'
+          },
+          {
+            role: 'user',
+            content: htmlConversionPrompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 16000
+      });
+
+      const htmlContent = completion.choices[0].message.content || detailedContent;
+      console.log("converted to HTML:", htmlContent);
+      
+      // 論文の内容セクションを見つけて置き換え
+      const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
+      const replacementSection = `## 論文の内容\n${htmlContent}\n\n`;
+      
+      if (contentSectionRegex.test(basicContent)) {
+        return basicContent.replace(contentSectionRegex, replacementSection);
       } else {
-        // 考察セクションも見つからない場合は最後に追加
-        return basicContent + '\n\n' + replacementSection;
+        // セクションが見つからない場合は、考察セクションの前に挿入
+        const considerationIndex = basicContent.indexOf('## 考察');
+        if (considerationIndex !== -1) {
+          return basicContent.slice(0, considerationIndex) + replacementSection + basicContent.slice(considerationIndex);
+        } else {
+          // 考察セクションも見つからない場合は最後に追加
+          return basicContent + '\n\n' + replacementSection;
+        }
+      }
+    } catch (error) {
+      console.error('Error converting Markdown to HTML:', error);
+      // エラーの場合は元のMarkdownコンテンツをそのまま使用
+      const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
+      const replacementSection = `## 論文の内容\n${detailedContent}\n\n`;
+      
+      if (contentSectionRegex.test(basicContent)) {
+        return basicContent.replace(contentSectionRegex, replacementSection);
+      } else {
+        const considerationIndex = basicContent.indexOf('## 考察');
+        if (considerationIndex !== -1) {
+          return basicContent.slice(0, considerationIndex) + replacementSection + basicContent.slice(considerationIndex);
+        } else {
+          return basicContent + '\n\n' + replacementSection;
+        }
       }
     }
   }
