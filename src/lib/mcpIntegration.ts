@@ -1,88 +1,29 @@
 import { BlogPost, ArticleGenerationResult, PaperArticle } from './types';
+import { WordPressIntegration } from './wordpressIntegration';
 
 /**
- * MCP連携用のユーティリティクラス（将来の拡張用）
- * Model Context Protocol (MCP) を使用してブログサービスと連携する機能を提供
+ * ブログ統合クラス（WordPress REST API対応）
+ * WordPress REST APIを使用してブログ投稿を管理
+ * 
+ * @deprecated MCPIntegrationは非推奨です。WordPressIntegrationを直接使用してください。
  */
 export class MCPIntegration {
-  private mcpEndpoint: string;
-  private apiKey: string;
+  private wordpressIntegration: WordPressIntegration;
 
-  constructor(mcpEndpoint?: string, apiKey?: string) {
-    this.mcpEndpoint = mcpEndpoint || process.env.MCP_ENDPOINT || '';
-    this.apiKey = apiKey || process.env.MCP_API_KEY || '';
+  constructor(wpEndpoint?: string, username?: string, appPassword?: string) {
+    // WordPress REST API統合を使用
+    this.wordpressIntegration = new WordPressIntegration(
+      wpEndpoint || process.env.WORDPRESS_ENDPOINT,
+      username || process.env.WORDPRESS_USERNAME,
+      appPassword || process.env.WORDPRESS_APP_PASSWORD
+    );
   }
 
   /**
-   * 論文解説記事をブログポストに変換
+   * 論文解説記事をWordPress投稿に変換（WordPress REST API対応）
    */
-  async convertToWordPressPost(articleResult: ArticleGenerationResult): Promise<BlogPost> {
-    const { paper, article, evaluation } = articleResult;
-    
-    const content = `
-<div class="paper-article">
-  <div class="tldr-section">
-    <h2>🚀 TL;DR</h2>
-    <p>${article.tldr}</p>
-  </div>
-
-  <div class="background-section">
-    <h2>🎯 背景・目的</h2>
-    <p>${article.background}</p>
-  </div>
-
-  <div class="good-points-section">
-    <h2>✨ この論文の良いところ</h2>
-    <p>${article.goodPoints}</p>
-  </div>
-
-  <div class="content-section">
-    <h2>📖 論文の内容</h2>
-    <p>${article.content}</p>
-  </div>
-
-  <div class="consideration-section">
-    <h2>🤔 考察</h2>
-    <p>${article.consideration}</p>
-  </div>
-
-  <div class="conclusion-section">
-    <h2>🎉 結論・まとめ</h2>
-    <p>${article.conclusion}</p>
-  </div>
-
-  <div class="paper-info">
-    <h3>📋 論文情報</h3>
-    <ul>
-      <li><strong>タイトル:</strong> ${paper.title}</li>
-      <li><strong>著者:</strong> ${paper.authors.join(', ')}</li>
-      <li><strong>arXiv ID:</strong> <a href="https://arxiv.org/abs/${paper.arxivId}" target="_blank">${paper.arxivId}</a></li>
-      <li><strong>カテゴリ:</strong> ${paper.subjects.join(', ')}</li>
-      <li><strong>評価スコア:</strong> ${evaluation.finalScore}点</li>
-    </ul>
-  </div>
-</div>`;
-
-    // WordPress用のタグを生成
-    const tags = [
-      '論文解説',
-      'arXiv',
-      'AI研究',
-      ...paper.subjects.map(subject => subject.replace('cs.', '')),
-      `評価${evaluation.finalScore}点`
-    ];
-
-    return {
-      id: `wp-${paper.arxivId}-${Date.now()}`,
-      title: article.title,
-      content,
-      tags,
-      status: 'draft',
-      metadata: {
-        paperInfo: paper,
-        evaluationScore: evaluation.finalScore
-      }
-    };
+  async convertToWordPressPost(articleResult: ArticleGenerationResult): Promise<any> {
+    return await this.wordpressIntegration.convertToWordPressPost(articleResult);
   }
 
   /**
@@ -148,105 +89,47 @@ export class MCPIntegration {
   }
 
   /**
-   * MCP経由でブログサービスに投稿（将来の実装用）
+   * WordPress REST APIを使用してブログに投稿
    */
-  async publishToBlog(blogPost: BlogPost, platform: 'wordpress' | 'notion' | 'medium' = 'wordpress'): Promise<{ success: boolean; postId?: string; error?: string }> {
-    if (!this.mcpEndpoint || !this.apiKey) {
-      return {
-        success: false,
-        error: 'MCP endpoint or API key not configured'
-      };
-    }
-
-    try {
-      // 将来的にMCPクライアントを使用してブログサービスに投稿
-      const response = await fetch(`${this.mcpEndpoint}/publish`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          platform,
-          post: blogPost
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return {
-        success: true,
-        postId: result.postId
-      };
-
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
+  async publishToBlog(articleResult: ArticleGenerationResult): Promise<{ success: boolean; postId?: number; postUrl?: string; error?: string }> {
+    return await this.wordpressIntegration.publishArticle(articleResult);
   }
 
   /**
-   * 複数の記事を一括でブログに投稿
+   * 複数の記事を一括でWordPressに投稿
    */
   async publishMultipleArticles(
     articles: ArticleGenerationResult[],
-    platform: 'wordpress' | 'notion' | 'medium' = 'wordpress',
     publishDelay: number = 5000 // 5秒間隔
-  ): Promise<Array<{ success: boolean; postId?: string; error?: string; articleId: string }>> {
-    const results = [];
-
-    for (const article of articles) {
-      try {
-        const blogPost = await this.convertToWordPressPost(article);
-        const result = await this.publishToBlog(blogPost, platform);
-        
-        results.push({
-          ...result,
-          articleId: article.paper.arxivId
-        });
-
-        // 次の投稿まで待機（レート制限対策）
-        if (publishDelay > 0) {
-          await new Promise(resolve => setTimeout(resolve, publishDelay));
-        }
-
-      } catch (error) {
-        results.push({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-          articleId: article.paper.arxivId
-        });
-      }
-    }
-
-    return results;
+  ): Promise<Array<{ success: boolean; postId?: number; postUrl?: string; error?: string; articleId: string }>> {
+    return await this.wordpressIntegration.publishMultipleArticles(articles, publishDelay);
   }
 
   /**
-   * 記事のプレビューURLを生成
+   * WordPress投稿のプレビューURLを生成
    */
-  generatePreviewUrl(blogPost: BlogPost): string {
-    return `${this.mcpEndpoint}/preview/${blogPost.id}`;
+  generatePreviewUrl(postId: number): string {
+    return this.wordpressIntegration.generatePreviewUrl(postId);
   }
 
   /**
-   * 記事の編集URLを生成
+   * WordPress投稿の編集URLを生成
    */
-  generateEditUrl(postId: string, platform: string): string {
-    switch (platform) {
-      case 'wordpress':
-        return `${this.mcpEndpoint}/wordpress/edit/${postId}`;
-      case 'notion':
-        return `${this.mcpEndpoint}/notion/edit/${postId}`;
-      case 'medium':
-        return `${this.mcpEndpoint}/medium/edit/${postId}`;
-      default:
-        return `${this.mcpEndpoint}/edit/${postId}`;
-    }
+  generateEditUrl(postId: number): string {
+    return this.wordpressIntegration.generateEditUrl(postId);
+  }
+
+  /**
+   * WordPress設定の検証
+   */
+  validateConfiguration(): { isValid: boolean; missingFields: string[] } {
+    return this.wordpressIntegration.validateConfiguration();
+  }
+
+  /**
+   * WordPress REST API接続テスト
+   */
+  async testConnection(): Promise<{ success: boolean; error?: string; siteInfo?: any }> {
+    return await this.wordpressIntegration.testConnection();
   }
 }
