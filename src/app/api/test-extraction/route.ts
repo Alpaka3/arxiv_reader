@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Ar5ivParser } from '@/lib/ar5ivParser';
+import { ArxivHtmlParser } from '@/lib/arxivHtmlParser';
 
 export async function GET() {
   return NextResponse.json({
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`Testing extraction for arXiv:${arxivId}`);
     
-    const parser = new Ar5ivParser();
+    const parser = new ArxivHtmlParser();
     
     // 詳細な抽出情報を取得
     const extractionInfo = await parser.getDetailedExtractionInfo(arxivId);

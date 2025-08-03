@@ -1,7 +1,7 @@
 import { PaperInfo } from './types';
 import * as cheerio from 'cheerio';
 
-export interface Ar5ivContent {
+export interface ArxivHtmlContent {
   fullText: string;
   sections: {
     [sectionName: string]: string;
@@ -37,7 +37,7 @@ export interface Ar5ivContent {
   results: string;
 }
 
-export class Ar5ivParser {
+export class ArxivHtmlParser {
   /**
    * arXiv IDからArxivの公式HTMLページのURLを生成
    */
@@ -72,8 +72,8 @@ export class Ar5ivParser {
   /**
    * HTMLから図表を抽出
    */
-  private extractFigures($: cheerio.CheerioAPI): Ar5ivContent['figures'] {
-    const figures: Ar5ivContent['figures'] = [];
+  private extractFigures($: cheerio.CheerioAPI): ArxivHtmlContent['figures'] {
+    const figures: ArxivHtmlContent['figures'] = [];
     
     console.log('Starting figure extraction...');
     
@@ -177,8 +177,8 @@ export class Ar5ivParser {
   /**
    * HTMLからテーブルを抽出
    */
-  private extractTables($: cheerio.CheerioAPI): Ar5ivContent['tables'] {
-    const tables: Ar5ivContent['tables'] = [];
+  private extractTables($: cheerio.CheerioAPI): ArxivHtmlContent['tables'] {
+    const tables: ArxivHtmlContent['tables'] = [];
     
     console.log('Starting table extraction...');
     
@@ -401,8 +401,8 @@ export class Ar5ivParser {
   /**
    * HTMLから数式を抽出
    */
-  private extractEquations($: cheerio.CheerioAPI): Ar5ivContent['equations'] {
-    const equations: Ar5ivContent['equations'] = [];
+  private extractEquations($: cheerio.CheerioAPI): ArxivHtmlContent['equations'] {
+    const equations: ArxivHtmlContent['equations'] = [];
     
     // MathJax/KaTeX数式を探す
     $('.ltx_Math, .MathJax, .katex, math').each((_, element) => {
@@ -440,8 +440,8 @@ export class Ar5ivParser {
   /**
    * HTMLからアルゴリズムを抽出
    */
-  private extractAlgorithms($: cheerio.CheerioAPI): Ar5ivContent['algorithms'] {
-    const algorithms: Ar5ivContent['algorithms'] = [];
+  private extractAlgorithms($: cheerio.CheerioAPI): ArxivHtmlContent['algorithms'] {
+    const algorithms: ArxivHtmlContent['algorithms'] = [];
     
     // アルゴリズム環境を探す
     $('.ltx_theorem_algorithm, .algorithm, div:contains("Algorithm")').each((_, element) => {
@@ -517,14 +517,14 @@ export class Ar5ivParser {
   }
 
   /**
-   * ar5ivから論文コンテンツを解析
+   * Arxivから論文コンテンツを解析
    */
-  async parsePaper(arxivId: string): Promise<Ar5ivContent> {
+  async parsePaper(arxivId: string): Promise<ArxivHtmlContent> {
     try {
       const html = await this.fetchArxivHtml(arxivId);
       const $ = cheerio.load(html);
       
-              console.log(`Parsing Arxiv HTML content for arXiv:${arxivId}`);
+      console.log(`Parsing Arxiv HTML content for arXiv:${arxivId}`);
       
       // 全体のテキストを取得
       const fullText = $('body').text();

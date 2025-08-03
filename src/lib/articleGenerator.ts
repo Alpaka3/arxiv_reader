@@ -1,17 +1,17 @@
 import OpenAI from 'openai';
 import { PaperInfo, EvaluationResult, PaperArticle, ArticleGenerationResult, BlogPost } from './types';
-import { Ar5ivParser } from './ar5ivParser';
+import { ArxivHtmlParser } from './arxivHtmlParser';
 
 export class PaperArticleGenerator {
   private openai: OpenAI;
-  private htmlParser: Ar5ivParser;
+  private htmlParser: ArxivHtmlParser;
 
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       baseURL: process.env.OPENAI_API_BASE,
     });
-    this.htmlParser = new Ar5ivParser();
+    this.htmlParser = new ArxivHtmlParser();
   }
 
   /**
