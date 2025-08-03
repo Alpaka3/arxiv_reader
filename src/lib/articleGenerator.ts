@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { PaperInfo, EvaluationResult, PaperArticle, ArticleGenerationResult, BlogPost } from './types';
 import { ArxivHtmlParser } from './arxivHtmlParser';
+import { marked } from 'marked';
 
 export class PaperArticleGenerator {
   private openai: OpenAI;
@@ -157,6 +158,7 @@ ${realContent.tableList ? `実際のTables: ${realContent.tableList}` : ''}
 3. 各段落で図表への言及を含めてください
 4. 「...」や省略表現は一切使用しないでください
 5. 記事の最後は適切な結論で締めくくってください
+6. 出力はMarkdown形式で記述してください（後でHTML形式に変換されます）
 
 【記事構成の指示】
 以下の順序で必ず全てのセクションを含めてください：
@@ -368,9 +370,14 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
   private replaceContentSection(basicContent: string, detailedContent: string): string {
     console.log("basic:", basicContent);
     console.log("detailed:", detailedContent);
+    
+    // MarkdownからHTMLに変換
+    const htmlContent = marked(detailedContent);
+    console.log("converted to HTML:", htmlContent);
+    
     // 論文の内容セクションを見つけて置き換え
     const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
-    const replacementSection = `## 論文の内容\n${detailedContent}\n\n`;
+    const replacementSection = `## 論文の内容\n${htmlContent}\n\n`;
     
     if (contentSectionRegex.test(basicContent)) {
       return basicContent.replace(contentSectionRegex, replacementSection);
