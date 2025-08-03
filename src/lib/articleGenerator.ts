@@ -188,14 +188,18 @@ ${realContent.tableList ? `実際のTables: ${realContent.tableList}` : ''}
         });
 
         const content = completion.choices[0].message.content || '論文の内容セクションの生成に失敗しました。';
-        
-        // レスポンスが途中で切れていないかチェック
-        if (completion.choices[0].finish_reason === 'length') {
-          console.warn(`Content was truncated for paper ${paperInfo.arxivId}, attempting continuation...`);
-          // 継続生成を試行
-          const continuationContent = await this.continueContentGeneration(content, paperInfo);
-          return content + continuationContent;
-        }
+        // // レスポンスが途中で切れていないかチェック
+        // if (completion.choices[0].finish_reason === 'length') {
+        //   console.warn(`Content was truncated for paper ${paperInfo.arxivId}, attempting continuation...`);
+        //   // 継続生成を試行
+        //   const continuationContent = await this.continueContentGeneration(content, paperInfo);
+        //   console.log("$$$$$$$$$$$ DEBUG ###################");
+        //   console.log("$$$$$$$$$$$ DEBUG ###################");
+        //   console.log(continuationContent);
+        //   console.log("$$$$$$$$$$$ DEBUG ###################");
+        //   console.log("$$$$$$$$$$$ DEBUG ###################");
+        //   return content + continuationContent;
+        // }
         
         return content;
     } catch (error) {
@@ -367,8 +371,6 @@ ${previousContent.slice(-1000)} // 最後の1000文字を含める
    * 基本記事の論文の内容セクションを詳細版に置き換え
    */
   private async replaceContentSection(basicContent: string, detailedContent: string): Promise<string> {
-    console.log("basic:", basicContent);
-    console.log("detailed:", detailedContent);
     
     // OpenAI APIを使ってMarkdownからHTMLに変換
     const htmlConversionPrompt = `以下のMarkdown形式のテキストを、適切なHTML形式に変換してください。
@@ -407,20 +409,21 @@ HTML形式で出力してください:`;
       console.log("converted to HTML:", htmlContent);
       
       // 論文の内容セクションを見つけて置き換え
-      const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
+      // const contentSectionRegex = /## 論文の内容[\s\S]*?(?=## |$)/;
+      const contentSectionRegex = /## 論文の内容[\s\S]*?(?=^##\s|\Z)/m;
       const replacementSection = `## 論文の内容\n${htmlContent}\n\n`;
       
       if (contentSectionRegex.test(basicContent)) {
         return basicContent.replace(contentSectionRegex, replacementSection);
-      } else {
-        // セクションが見つからない場合は、考察セクションの前に挿入
-        const considerationIndex = basicContent.indexOf('## 考察');
-        if (considerationIndex !== -1) {
-          return basicContent.slice(0, considerationIndex) + replacementSection + basicContent.slice(considerationIndex);
-        } else {
-          // 考察セクションも見つからない場合は最後に追加
-          return basicContent + '\n\n' + replacementSection;
-        }
+      // } else {
+      //   // セクションが見つからない場合は、考察セクションの前に挿入
+      //   const considerationIndex = basicContent.indexOf('## 考察');
+      //   if (considerationIndex !== -1) {
+      //     return basicContent.slice(0, considerationIndex) + replacementSection + basicContent.slice(considerationIndex);
+      //   } else {
+      //     // 考察セクションも見つからない場合は最後に追加
+      //     return basicContent + '\n\n' + replacementSection;
+      //   }
       }
     } catch (error) {
       console.error('Error converting Markdown to HTML:', error);
@@ -483,7 +486,7 @@ HTML形式で出力してください:`;
           const figureHtml = `$1
 
 <div class="figure-embed" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9;">
-  <img src="${figureData.imageUrl}" alt="${figureData.figureNumber}" style="max-width: 100%; height: auto; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" onerror="this.style.display='none'; this.nextElementSibling.innerHTML='<span style=\\"color: #999;\\">画像の読み込みに失敗しました: ${figureData.imageUrl}</span>'" />
+  <img src="${figureData.imageUrl}" alt="${figureData.figureNumber}" style="max-width: 100%; height: auto; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" onerror="this.style.display='none'; this.nextElementSibling.innerHTML='<span style=\\"color: #999;\\">${figureData.imageUrl}</span>'" 
   <p style="margin: 10px 0 0 0; font-size: 14px; color: #666; font-style: italic;">
     <strong>${figureData.figureNumber}:</strong> ${figureData.caption}
   </p>
@@ -587,8 +590,6 @@ HTML形式で出力してください:`;
         
         // 文字列コンテンツをPaperArticle形式に変換
         const article = await this.parseArticleContent(articleContent, result.paper);
-        console.log("ARTICLE #####################:", article);
-        console.log("ARTICLE CONTENT ##################:", articleContent);
         
         articles.push({
           paper: result.paper,
