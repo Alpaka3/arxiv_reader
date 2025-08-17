@@ -13,6 +13,7 @@ export default function Home() {
   const [singleResult, setSingleResult] = useState<EvaluationResponse | null>(null);
   const [dateResults, setDateResults] = useState<DateEvaluationResponse | null>(null);
   const [generateArticles, setGenerateArticles] = useState(false);
+  const [postToWordPress, setPostToWordPress] = useState(false);
 
   const evaluateSinglePaper = async () => {
     if (!arxivUrl.trim()) {
@@ -61,7 +62,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ date, debugMode }),
+        body: JSON.stringify({ date, debugMode, postToWordPress }),
       });
 
       const data: DateEvaluationResponse = await response.json();
@@ -340,6 +341,20 @@ export default function Home() {
             </div>
 
             <div className="mb-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={postToWordPress}
+                  onChange={(e) => setPostToWordPress(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  🌐 WordPressに自動投稿する（評価結果を下書きとして投稿）
+                </span>
+              </label>
+            </div>
+
+            <div className="mb-4">
               <p className="text-sm text-gray-600">
                 {debugMode 
                   ? 'cs.AI, cs.CV, cs.LGカテゴリから各3件ずつ評価し、上位3件を表示します' 
@@ -348,6 +363,11 @@ export default function Home() {
                 {generateArticles && (
                   <span className="block mt-1 text-purple-600 font-medium">
                     💡 解説記事生成が有効です。評価後に上位3件の詳細記事を自動生成します。
+                  </span>
+                )}
+                {postToWordPress && (
+                  <span className="block mt-1 text-blue-600 font-medium">
+                    🌐 WordPress投稿が有効です。評価完了後に結果を自動的にWordPressに下書き投稿します。
                   </span>
                 )}
               </p>

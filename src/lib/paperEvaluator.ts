@@ -1,10 +1,12 @@
 import OpenAI from 'openai';
 import { PaperInfo, EvaluationResult, FormattedOutput, ArticleGenerationResult } from './types';
 import { PaperArticleGenerator } from './articleGenerator';
+import { WordPressIntegration } from './wordpressIntegration';
 
 export class ArxivPaperEvaluator {
   private openai: OpenAI;
   private articleGenerator: PaperArticleGenerator;
+  private wordpressIntegration: WordPressIntegration;
 
   constructor() {
     this.openai = new OpenAI({
@@ -12,6 +14,7 @@ export class ArxivPaperEvaluator {
       baseURL: process.env.OPENAI_API_BASE,
     });
     this.articleGenerator = new PaperArticleGenerator();
+    this.wordpressIntegration = new WordPressIntegration();
   }
 
   /**
@@ -311,9 +314,52 @@ Abstract: ${paperInfo.abstract}`;
   }
 
   /**
+   * 論文評価結果をWordPress投稿用のHTMLコンテンツに変換
+   */
+  private formatEvaluationResultsForWordPress(results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>): string {
+    if (!results || results.length === 0) {
+      return '<p>評価結果がありません。</p>';
+    }
+
+    let content = '<div class="paper-evaluation-results">\n';
+    
+    results.forEach((result, index) => {
+      const { paper, evaluation, formattedOutput } = result;
+      
+      content += `
+  <div class="paper-result" style="margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+    <h3>${index + 1}. ${paper.title}</h3>
+    
+    <div class="paper-info" style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 15px 0;">
+      <p><strong>arXiv ID:</strong> <a href="https://arxiv.org/abs/${paper.arxivId}" target="_blank">${paper.arxivId}</a></p>
+      <p><strong>著者:</strong> ${paper.authors.join(', ')}</p>
+      <p><strong>カテゴリ:</strong> ${paper.subjects.join(', ')}</p>
+      <p><strong>評価スコア:</strong> <span style="background-color: #3b82f6; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold;">${formattedOutput.point}点</span></p>
+    </div>
+    
+    <div class="evaluation-details">
+      <h4>📊 評価理由</h4>
+      <div style="background-color: #f0f9ff; padding: 15px; border-radius: 5px; margin: 10px 0;">
+        <p>${formattedOutput.reasoning.replace(/\n/g, '<br>')}</p>
+      </div>
+      
+      <h4>🔢 計算過程</h4>
+      <div style="background-color: #fefce8; padding: 15px; border-radius: 5px; margin: 10px 0;">
+        <p>${formattedOutput.calculation.replace(/\n/g, '<br>')}</p>
+      </div>
+    </div>
+  </div>
+`;
+    });
+    
+    content += '</div>';
+    return content;
+  }
+
+  /**
    * 指定日付の論文リストを評価
    */
-  async evaluatePapersByDate(date: string, isDebugMode: boolean = true): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
+  async evaluatePapersByDate(date: string, isDebugMode: boolean = true, postToWordPress: boolean = false): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
     const papers = await this.fetchPapersByDate(date, isDebugMode);
     const results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}> = [];
 
@@ -342,6 +388,32 @@ Abstract: ${paperInfo.abstract}`;
     
     console.log(`Evaluation completed. Total evaluated: ${results.length}, returning top 3 results.`);
     console.log('Top 3 scores:', top3Results.map(r => r.formattedOutput.point));
+
+    // WordPressに投稿する場合
+    if (postToWordPress && top3Results.length > 0) {
+      try {
+        console.log('📝 WordPressに評価結果を投稿中...');
+        
+        const content = this.formatEvaluationResultsForWordPress(top3Results);
+        const title = `論文評価結果 - ${date}`;
+        
+        const postResult = await this.wordpressIntegration.createPost({
+          title: title,
+          content: content,
+          status: 'draft'
+        });
+
+        if (postResult.success) {
+          console.log('✅ WordPress投稿が正常に作成されました！');
+          console.log(`📄 投稿ID: ${postResult.postId}`);
+          console.log(`🔗 投稿URL: ${postResult.postUrl}`);
+        } else {
+          console.error('❌ WordPress投稿の作成に失敗しました:', postResult.error);
+        }
+      } catch (error) {
+        console.error('❌ WordPress投稿中にエラーが発生しました:', error);
+      }
+    }
 
     return top3Results;
   }
