@@ -208,25 +208,48 @@ export class WordPressIntegration {
     }
 
     try {
-      // const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/posts`, {
-      const response = await fetch(`${this.wpEndpoint}?rest_route=/wp/v2`, {
+      // 正しいWordPress REST APIエンドポイントを使用
+      const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/posts`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(postData)
       });
 
+      // レスポンスのContent-Typeを確認
+      const contentType = response.headers.get('content-type');
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`WordPress API error: ${response.status} - ${errorData.message || 'Unknown error'}`);
+        // HTMLレスポンスの場合の処理
+        if (contentType && contentType.includes('text/html')) {
+          const htmlResponse = await response.text();
+          throw new Error(`WordPress API returned HTML instead of JSON. Status: ${response.status}. This usually indicates an authentication or endpoint configuration issue.`);
+        }
+        
+        // JSONエラーレスポンスの場合
+        try {
+          const errorData = await response.json();
+          throw new Error(`WordPress API error: ${response.status} - ${errorData.message || errorData.code || 'Unknown error'}`);
+        } catch (parseError) {
+          // JSONパースに失敗した場合
+          const textResponse = await response.text();
+          throw new Error(`WordPress API error: ${response.status} - Unable to parse error response: ${textResponse.substring(0, 200)}`);
+        }
       }
 
-      const result = await response.json();
-      
-      return {
-        success: true,
-        postId: result.id,
-        postUrl: result.link
-      };
+      // 成功レスポンスのパース
+      try {
+        const result = await response.json();
+        
+        return {
+          success: true,
+          postId: result.id,
+          postUrl: result.link
+        };
+      } catch (parseError) {
+        // 成功レスポンスのJSONパースに失敗した場合
+        const textResponse = await response.text();
+        throw new Error(`Failed to parse WordPress API response as JSON: ${textResponse.substring(0, 200)}`);
+      }
 
     } catch (error) {
       return {
@@ -248,24 +271,47 @@ export class WordPressIntegration {
     }
 
     try {
-      // const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/posts/${postId}`, {
-      const response = await fetch(`${this.wpEndpoint}?rest_route=/wp/v2/${postId}`, {
+      // 正しいWordPress REST APIエンドポイントを使用
+      const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/posts/${postId}`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(postData)
       });
 
+      // レスポンスのContent-Typeを確認
+      const contentType = response.headers.get('content-type');
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`WordPress API error: ${response.status} - ${errorData.message || 'Unknown error'}`);
+        // HTMLレスポンスの場合の処理
+        if (contentType && contentType.includes('text/html')) {
+          const htmlResponse = await response.text();
+          throw new Error(`WordPress API returned HTML instead of JSON. Status: ${response.status}. This usually indicates an authentication or endpoint configuration issue.`);
+        }
+        
+        // JSONエラーレスポンスの場合
+        try {
+          const errorData = await response.json();
+          throw new Error(`WordPress API error: ${response.status} - ${errorData.message || errorData.code || 'Unknown error'}`);
+        } catch (parseError) {
+          // JSONパースに失敗した場合
+          const textResponse = await response.text();
+          throw new Error(`WordPress API error: ${response.status} - Unable to parse error response: ${textResponse.substring(0, 200)}`);
+        }
       }
 
-      const result = await response.json();
-      
-      return {
-        success: true,
-        postUrl: result.link
-      };
+      // 成功レスポンスのパース
+      try {
+        const result = await response.json();
+        
+        return {
+          success: true,
+          postUrl: result.link
+        };
+      } catch (parseError) {
+        // 成功レスポンスのJSONパースに失敗した場合
+        const textResponse = await response.text();
+        throw new Error(`Failed to parse WordPress API response as JSON: ${textResponse.substring(0, 200)}`);
+      }
 
     } catch (error) {
       return {
@@ -368,8 +414,7 @@ export class WordPressIntegration {
 
     try {
       // サイト情報を取得してAPI接続をテスト
-      // const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/`);
-      const response = await fetch(`${this.wpEndpoint}?rest_route=/wp/v2`);
+      const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
