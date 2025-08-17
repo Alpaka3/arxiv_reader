@@ -209,11 +209,19 @@ export class WordPressIntegration {
 
     try {
       // 正しいWordPress REST APIエンドポイントを使用
-      const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/posts`, {
+      const baseUrl = this.getBaseApiUrl();
+      console.log(`🔗 WordPress API URL: ${baseUrl}/posts`);
+      console.log(`👤 Username: ${this.username}`);
+      console.log(`🔑 App Password: ${this.appPassword ? '[SET]' : '[NOT SET]'}`);
+      
+      const response = await fetch(`${baseUrl}/posts`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(postData)
       });
+
+      console.log(`📡 Response Status: ${response.status}`);
+      console.log(`📋 Response Headers:`, Object.fromEntries(response.headers.entries()));
 
       // レスポンスのContent-Typeを確認
       const contentType = response.headers.get('content-type');
@@ -222,16 +230,19 @@ export class WordPressIntegration {
         // HTMLレスポンスの場合の処理
         if (contentType && contentType.includes('text/html')) {
           const htmlResponse = await response.text();
+          console.log(`❌ HTML Response (first 500 chars): ${htmlResponse.substring(0, 500)}`);
           throw new Error(`WordPress API returned HTML instead of JSON. Status: ${response.status}. This usually indicates an authentication or endpoint configuration issue.`);
         }
         
         // JSONエラーレスポンスの場合
         try {
           const errorData = await response.json();
+          console.log(`❌ JSON Error Response:`, errorData);
           throw new Error(`WordPress API error: ${response.status} - ${errorData.message || errorData.code || 'Unknown error'}`);
         } catch (parseError) {
           // JSONパースに失敗した場合
           const textResponse = await response.text();
+          console.log(`❌ Raw Error Response: ${textResponse.substring(0, 500)}`);
           throw new Error(`WordPress API error: ${response.status} - Unable to parse error response: ${textResponse.substring(0, 200)}`);
         }
       }
@@ -239,6 +250,7 @@ export class WordPressIntegration {
       // 成功レスポンスのパース
       try {
         const result = await response.json();
+        console.log(`✅ Success Response:`, result);
         
         return {
           success: true,
@@ -248,10 +260,12 @@ export class WordPressIntegration {
       } catch (parseError) {
         // 成功レスポンスのJSONパースに失敗した場合
         const textResponse = await response.text();
+        console.log(`❌ Success Response Parse Error: ${textResponse.substring(0, 500)}`);
         throw new Error(`Failed to parse WordPress API response as JSON: ${textResponse.substring(0, 200)}`);
       }
 
     } catch (error) {
+      console.error(`❌ createPost Error:`, error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -272,7 +286,8 @@ export class WordPressIntegration {
 
     try {
       // 正しいWordPress REST APIエンドポイントを使用
-      const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/posts/${postId}`, {
+      const baseUrl = this.getBaseApiUrl();
+      const response = await fetch(`${baseUrl}/posts/${postId}`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(postData)
@@ -413,8 +428,9 @@ export class WordPressIntegration {
     }
 
     try {
-      // サイト情報を取得してAPI接続をテスト
-      const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/`);
+      // エンドポイントの正規化 - 既にREST APIパスが含まれているかチェック
+      const baseUrl = this.getBaseApiUrl();
+      const response = await fetch(`${baseUrl}/`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -438,5 +454,19 @@ export class WordPressIntegration {
         error: error instanceof Error ? error.message : 'Connection test failed'
       };
     }
+  }
+
+  /**
+   * WordPress REST APIのベースURLを取得
+   */
+  private getBaseApiUrl(): string {
+    // 既に wp-json/wp/v2 が含まれているかチェック
+    if (this.wpEndpoint.includes('/wp-json/wp/v2')) {
+      return this.wpEndpoint;
+    }
+    
+    // 末尾のスラッシュを削除してからREST APIパスを追加
+    const cleanEndpoint = this.wpEndpoint.replace(/\/$/, '');
+    return `${cleanEndpoint}/wp-json/wp/v2`;
   }
 }
