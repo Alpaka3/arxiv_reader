@@ -362,7 +362,7 @@ export class WordPressIntegration {
   async publishArticle(articleResult: ArticleGenerationResult): Promise<{ success: boolean; postId?: number; postUrl?: string; error?: string }> {
     try {
       const postData = await this.convertToWordPressPost(articleResult);
-      return await this.createPost(postData);
+      return await this.createPostWithFallback(postData);
     } catch (error) {
       return {
         success: false,
@@ -481,6 +481,81 @@ export class WordPressIntegration {
   }
 
   /**
+   * WordPress REST API接続テスト（詳細版）
+   */
+  async testConnectionDetailed(): Promise<{ success: boolean; error?: string; testResults?: any }> {
+    if (!this.wpEndpoint) {
+      return {
+        success: false,
+        error: 'WordPress endpoint not configured'
+      };
+    }
+
+    const testResults: any = {};
+    const cleanEndpoint = this.wpEndpoint.replace(/\/$/, '');
+
+    // テストするエンドポイント一覧
+    const testEndpoints = [
+      { name: 'wp-json root', url: `${cleanEndpoint}/wp-json/` },
+      { name: 'wp-json wp/v2', url: `${cleanEndpoint}/wp-json/wp/v2/` },
+      { name: 'rest_route root', url: `${cleanEndpoint}/?rest_route=/` },
+      { name: 'rest_route wp/v2', url: `${cleanEndpoint}/?rest_route=/wp/v2/` },
+      { name: 'xmlrpc', url: `${cleanEndpoint}/xmlrpc.php` }
+    ];
+
+    console.log('🔍 WordPress REST API詳細テスト開始...');
+
+    for (const endpoint of testEndpoints) {
+      try {
+        console.log(`📡 Testing ${endpoint.name}: ${endpoint.url}`);
+        
+        const response = await fetch(endpoint.url, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'WordPress-API-Client/1.0',
+            'Accept': 'application/json, text/html',
+          }
+        });
+
+        const contentType = response.headers.get('content-type') || 'unknown';
+        let responseData = '';
+        
+        try {
+          responseData = await response.text();
+        } catch (e) {
+          responseData = 'Unable to read response';
+        }
+
+        testResults[endpoint.name] = {
+          status: response.status,
+          contentType,
+          isJson: contentType.includes('application/json'),
+          responsePreview: responseData.substring(0, 200),
+          success: response.ok
+        };
+
+        console.log(`   Status: ${response.status}, Content-Type: ${contentType}`);
+        
+      } catch (error) {
+        testResults[endpoint.name] = {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          success: false
+        };
+        console.log(`   Error: ${error}`);
+      }
+    }
+
+    // 結果の評価
+    const hasWorkingEndpoint = Object.values(testResults).some((result: any) => result.success && result.isJson);
+    
+    return {
+      success: hasWorkingEndpoint,
+      testResults,
+      error: hasWorkingEndpoint ? undefined : 'No working REST API endpoint found'
+    };
+  }
+
+  /**
    * WordPress REST APIのベースURLを取得
    */
   private getBaseApiUrl(): string {
@@ -537,5 +612,131 @@ export class WordPressIntegration {
     
     // wp-json 形式の場合
     return `${baseUrl}/posts/${postId}`;
+  }
+
+  /**
+   * XML-RPC APIを使用して投稿を作成（代替手段）
+   */
+  async createPostViaXmlRpc(postData: any): Promise<{ success: boolean; postId?: number; postUrl?: string; error?: string }> {
+    if (!this.wpEndpoint || !this.username || !this.appPassword) {
+      return {
+        success: false,
+        error: 'WordPress credentials not configured'
+      };
+    }
+
+    try {
+      const cleanEndpoint = this.wpEndpoint.replace(/\/$/, '');
+      const xmlrpcUrl = `${cleanEndpoint}/xmlrpc.php`;
+      
+      console.log(`🔗 WordPress XML-RPC URL: ${xmlrpcUrl}`);
+      console.log(`👤 Username: ${this.username}`);
+
+      // XML-RPC リクエストボディを作成
+      const xmlrpcBody = `<?xml version="1.0" encoding="UTF-8"?>
+<methodCall>
+  <methodName>wp.newPost</methodName>
+  <params>
+    <param><value><string>1</string></value></param>
+    <param><value><string>${this.username}</string></value></param>
+    <param><value><string>${this.appPassword}</string></value></param>
+    <param>
+      <value>
+        <struct>
+          <member>
+            <name>post_title</name>
+            <value><string><![CDATA[${postData.title}]]></string></value>
+          </member>
+          <member>
+            <name>post_content</name>
+            <value><string><![CDATA[${postData.content}]]></string></value>
+          </member>
+          <member>
+            <name>post_status</name>
+            <value><string>${postData.status || 'draft'}</string></value>
+          </member>
+          <member>
+            <name>post_excerpt</name>
+            <value><string><![CDATA[${postData.excerpt || ''}]]></string></value>
+          </member>
+        </struct>
+      </value>
+    </param>
+  </params>
+</methodCall>`;
+
+      const response = await fetch(xmlrpcUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml',
+          'User-Agent': 'WordPress-XML-RPC-Client/1.0'
+        },
+        body: xmlrpcBody
+      });
+
+      console.log(`📡 XML-RPC Response Status: ${response.status}`);
+
+      if (!response.ok) {
+        const responseText = await response.text();
+        console.log(`❌ XML-RPC Error Response: ${responseText.substring(0, 500)}`);
+        throw new Error(`XML-RPC API error: ${response.status}`);
+      }
+
+      const responseText = await response.text();
+      console.log(`📄 XML-RPC Response: ${responseText.substring(0, 500)}`);
+
+      // XML-RPC レスポンスから投稿IDを抽出（簡易的な実装）
+      const postIdMatch = responseText.match(/<string>(\d+)<\/string>/);
+      const postId = postIdMatch ? parseInt(postIdMatch[1]) : undefined;
+
+      if (postId) {
+        const postUrl = `${cleanEndpoint}/?p=${postId}`;
+        return {
+          success: true,
+          postId,
+          postUrl
+        };
+      } else {
+        throw new Error('Failed to extract post ID from XML-RPC response');
+      }
+
+    } catch (error) {
+      console.error(`❌ XML-RPC Error:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
+   * 投稿作成（REST API失敗時はXML-RPCにフォールバック）
+   */
+  async createPostWithFallback(postData: any): Promise<{ success: boolean; postId?: number; postUrl?: string; error?: string }> {
+    console.log('🚀 WordPress投稿を開始（REST API → XML-RPC フォールバック）');
+    
+    // まずREST APIを試す
+    const restResult = await this.createPost(postData);
+    
+    if (restResult.success) {
+      console.log('✅ REST APIでの投稿に成功しました');
+      return restResult;
+    }
+    
+    console.log('⚠️ REST APIが失敗しました。XML-RPCを試します...');
+    
+    // REST APIが失敗した場合、XML-RPCを試す
+    const xmlrpcResult = await this.createPostViaXmlRpc(postData);
+    
+    if (xmlrpcResult.success) {
+      console.log('✅ XML-RPCでの投稿に成功しました');
+      return xmlrpcResult;
+    }
+    
+    console.log('❌ 両方の方法が失敗しました');
+    return {
+      success: false,
+      error: `REST API Error: ${restResult.error}; XML-RPC Error: ${xmlrpcResult.error}`
+    };
   }
 }
