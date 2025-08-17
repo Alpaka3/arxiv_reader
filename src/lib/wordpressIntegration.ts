@@ -209,12 +209,12 @@ export class WordPressIntegration {
 
     try {
       // 正しいWordPress REST APIエンドポイントを使用
-      const baseUrl = this.getBaseApiUrl();
-      console.log(`🔗 WordPress API URL: ${baseUrl}/posts`);
+      const apiUrl = this.getPostsEndpoint();
+      console.log(`🔗 WordPress API URL: ${apiUrl}`);
       console.log(`👤 Username: ${this.username}`);
       console.log(`🔑 App Password: ${this.appPassword ? '[SET]' : '[NOT SET]'}`);
       
-      const response = await fetch(`${baseUrl}/posts`, {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(postData)
@@ -286,8 +286,8 @@ export class WordPressIntegration {
 
     try {
       // 正しいWordPress REST APIエンドポイントを使用
-      const baseUrl = this.getBaseApiUrl();
-      const response = await fetch(`${baseUrl}/posts/${postId}`, {
+      const apiUrl = this.getPostEndpoint(postId);
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(postData)
@@ -430,7 +430,11 @@ export class WordPressIntegration {
     try {
       // エンドポイントの正規化 - 既にREST APIパスが含まれているかチェック
       const baseUrl = this.getBaseApiUrl();
-      const response = await fetch(`${baseUrl}/`);
+      const testUrl = baseUrl.includes('?rest_route=') ? baseUrl : `${baseUrl}/`;
+      
+      console.log(`🔗 Testing WordPress API connection: ${testUrl}`);
+      
+      const response = await fetch(testUrl);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -460,6 +464,11 @@ export class WordPressIntegration {
    * WordPress REST APIのベースURLを取得
    */
   private getBaseApiUrl(): string {
+    // 既に ?rest_route= が含まれているかチェック
+    if (this.wpEndpoint.includes('?rest_route=')) {
+      return this.wpEndpoint;
+    }
+    
     // 既に wp-json/wp/v2 が含まれているかチェック
     if (this.wpEndpoint.includes('/wp-json/wp/v2')) {
       return this.wpEndpoint;
@@ -467,6 +476,38 @@ export class WordPressIntegration {
     
     // 末尾のスラッシュを削除してからREST APIパスを追加
     const cleanEndpoint = this.wpEndpoint.replace(/\/$/, '');
-    return `${cleanEndpoint}/wp-json/wp/v2`;
+    
+    // デフォルトは ?rest_route= 形式を使用
+    return `${cleanEndpoint}/?rest_route=/wp/v2`;
+  }
+
+  /**
+   * 投稿用のエンドポイントURLを生成
+   */
+  private getPostsEndpoint(): string {
+    const baseUrl = this.getBaseApiUrl();
+    
+    // ?rest_route= 形式の場合
+    if (baseUrl.includes('?rest_route=')) {
+      return `${baseUrl}/posts`;
+    }
+    
+    // wp-json 形式の場合
+    return `${baseUrl}/posts`;
+  }
+
+  /**
+   * 特定の投稿更新用のエンドポイントURLを生成
+   */
+  private getPostEndpoint(postId: number): string {
+    const baseUrl = this.getBaseApiUrl();
+    
+    // ?rest_route= 形式の場合
+    if (baseUrl.includes('?rest_route=')) {
+      return `${baseUrl}/posts/${postId}`;
+    }
+    
+    // wp-json 形式の場合
+    return `${baseUrl}/posts/${postId}`;
   }
 }
