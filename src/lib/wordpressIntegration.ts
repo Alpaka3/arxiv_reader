@@ -208,7 +208,8 @@ export class WordPressIntegration {
     }
 
     try {
-      const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/posts`, {
+      // const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/posts`, {
+      const response = await fetch(`${this.wpEndpoint}?rest_route=/wp/v2`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(postData)
@@ -247,7 +248,8 @@ export class WordPressIntegration {
     }
 
     try {
-      const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/posts/${postId}`, {
+      // const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/posts/${postId}`, {
+      const response = await fetch(`${this.wpEndpoint}?rest_route=/wp/v2/${postId}`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(postData)
@@ -366,7 +368,8 @@ export class WordPressIntegration {
 
     try {
       // サイト情報を取得してAPI接続をテスト
-      const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/`);
+      // const response = await fetch(`${this.wpEndpoint}/wp-json/wp/v2/`);
+      const response = await fetch(`${this.wpEndpoint}?rest_route=/wp/v2`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);

@@ -359,7 +359,7 @@ Abstract: ${paperInfo.abstract}`;
   /**
    * 指定日付の論文リストを評価
    */
-  async evaluatePapersByDate(date: string, isDebugMode: boolean = true, postToWordPress: boolean = false): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
+  async evaluatePapersByDate(date: string, isDebugMode: boolean = true, postToWordPress: boolean = true): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
     const papers = await this.fetchPapersByDate(date, isDebugMode);
     const results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}> = [];
 
