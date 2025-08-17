@@ -22,7 +22,10 @@ export class WordPressIntegration {
     const credentials = Buffer.from(`${this.username}:${this.appPassword}`).toString('base64');
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Basic ${credentials}`
+      'Authorization': `Basic ${credentials}`,
+      'User-Agent': 'WordPress-API-Client/1.0',
+      'Accept': 'application/json',
+      'Cache-Control': 'no-cache'
     };
   }
 
@@ -35,31 +38,14 @@ export class WordPressIntegration {
     // HTMLコンテンツを生成
     const content = this.generateWordPressHTML(article, paper, evaluation);
     
-    // WordPress用のタグを生成
-    const tags = [
-      '論文解説',
-      'arXiv',
-      'AI研究',
-      ...paper.subjects.map(subject => subject.replace('cs.', '')),
-      `評価${evaluation.finalScore}点`
-    ];
-
-    // カテゴリを生成（主要なサブジェクトから）
-    const categories = this.mapSubjectsToCategories(paper.subjects);
-
+    // WordPress投稿データを生成（シンプルな形式）
     return {
       title: article.title,
       content,
       status: 'draft', // または 'publish'
-      tags: tags.join(','),
-      categories: categories,
       excerpt: article.tldr,
-      meta: {
-        arxiv_id: paper.arxivId,
-        evaluation_score: evaluation.finalScore,
-        authors: paper.authors.join(', '),
-        generated_at: article.generatedAt
-      }
+      // tagsとcategoriesは一旦削除してシンプルにする
+      // meta情報も削除して基本的な投稿のみ行う
     };
   }
 
@@ -207,70 +193,104 @@ export class WordPressIntegration {
       };
     }
 
-    try {
-      // 正しいWordPress REST APIエンドポイントを使用
-      const apiUrl = this.getPostsEndpoint();
-      console.log(`🔗 WordPress API URL: ${apiUrl}`);
-      console.log(`👤 Username: ${this.username}`);
-      console.log(`🔑 App Password: ${this.appPassword ? '[SET]' : '[NOT SET]'}`);
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(postData)
-      });
+    // 最初に wp-json 形式を試す
+    let apiUrl = this.getPostsEndpoint();
+    let attempt = 1;
+    const maxAttempts = 2;
 
-      console.log(`📡 Response Status: ${response.status}`);
-      console.log(`📋 Response Headers:`, Object.fromEntries(response.headers.entries()));
+    while (attempt <= maxAttempts) {
+      try {
+        console.log(`🔗 WordPress API URL (Attempt ${attempt}): ${apiUrl}`);
+        console.log(`👤 Username: ${this.username}`);
+        console.log(`🔑 App Password: ${this.appPassword ? '[SET]' : '[NOT SET]'}`);
+        
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: this.getAuthHeaders(),
+          body: JSON.stringify(postData)
+        });
 
-      // レスポンスのContent-Typeを確認
-      const contentType = response.headers.get('content-type');
-      
-      if (!response.ok) {
-        // HTMLレスポンスの場合の処理
-        if (contentType && contentType.includes('text/html')) {
-          const htmlResponse = await response.text();
-          console.log(`❌ HTML Response (first 500 chars): ${htmlResponse.substring(0, 500)}`);
-          throw new Error(`WordPress API returned HTML instead of JSON. Status: ${response.status}. This usually indicates an authentication or endpoint configuration issue.`);
+        console.log(`📡 Response Status: ${response.status}`);
+        console.log(`📋 Response Headers:`, Object.fromEntries(response.headers.entries()));
+
+        // レスポンスのContent-Typeを確認
+        const contentType = response.headers.get('content-type');
+        
+        // 403エラーでSiteGuard Liteのブロックの場合、フォールバックを試す
+        if (response.status === 403 && attempt === 1) {
+          console.log('⚠️ 403エラーが発生しました。?rest_route=形式でリトライします...');
+          apiUrl = `${this.getFallbackApiUrl()}/posts`;
+          attempt++;
+          continue;
         }
         
-        // JSONエラーレスポンスの場合
-        try {
-          const errorData = await response.json();
-          console.log(`❌ JSON Error Response:`, errorData);
-          throw new Error(`WordPress API error: ${response.status} - ${errorData.message || errorData.code || 'Unknown error'}`);
-        } catch (parseError) {
-          // JSONパースに失敗した場合
-          const textResponse = await response.text();
-          console.log(`❌ Raw Error Response: ${textResponse.substring(0, 500)}`);
-          throw new Error(`WordPress API error: ${response.status} - Unable to parse error response: ${textResponse.substring(0, 200)}`);
+        if (!response.ok) {
+          // レスポンスボディを一度だけ読み込む
+          let responseText: string;
+          try {
+            responseText = await response.text();
+          } catch (error) {
+            responseText = 'Unable to read response body';
+          }
+          
+          // HTMLレスポンスの場合の処理
+          if (contentType && contentType.includes('text/html')) {
+            console.log(`❌ HTML Response (first 500 chars): ${responseText.substring(0, 500)}`);
+            throw new Error(`WordPress API returned HTML instead of JSON. Status: ${response.status}. This usually indicates an authentication or endpoint configuration issue.`);
+          }
+          
+          // JSONエラーレスポンスの場合
+          try {
+            const errorData = JSON.parse(responseText);
+            console.log(`❌ JSON Error Response:`, errorData);
+            throw new Error(`WordPress API error: ${response.status} - ${errorData.message || errorData.code || 'Unknown error'}`);
+          } catch (parseError) {
+            // JSONパースに失敗した場合
+            console.log(`❌ Raw Error Response: ${responseText.substring(0, 500)}`);
+            throw new Error(`WordPress API error: ${response.status} - Unable to parse error response: ${responseText.substring(0, 200)}`);
+          }
         }
-      }
 
-      // 成功レスポンスのパース
-      try {
-        const result = await response.json();
-        console.log(`✅ Success Response:`, result);
+        // 成功レスポンスのパース
+        try {
+          const responseText = await response.text();
+          const result = JSON.parse(responseText);
+          console.log(`✅ Success Response:`, result);
+          
+          return {
+            success: true,
+            postId: result.id,
+            postUrl: result.link
+          };
+        } catch (parseError) {
+          // 成功レスポンスのJSONパースに失敗した場合
+          const responseText = await response.text();
+          console.log(`❌ Success Response Parse Error: ${responseText.substring(0, 500)}`);
+          throw new Error(`Failed to parse WordPress API response as JSON: ${responseText.substring(0, 200)}`);
+        }
+
+      } catch (error) {
+        console.error(`❌ createPost Error (Attempt ${attempt}):`, error);
+        
+        // 最後の試行でない場合は次を試す
+        if (attempt < maxAttempts && error instanceof Error && error.message.includes('403')) {
+          console.log('⚠️ 403エラーのため、次の方法を試します...');
+          apiUrl = `${this.getFallbackApiUrl()}/posts`;
+          attempt++;
+          continue;
+        }
         
         return {
-          success: true,
-          postId: result.id,
-          postUrl: result.link
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error occurred'
         };
-      } catch (parseError) {
-        // 成功レスポンスのJSONパースに失敗した場合
-        const textResponse = await response.text();
-        console.log(`❌ Success Response Parse Error: ${textResponse.substring(0, 500)}`);
-        throw new Error(`Failed to parse WordPress API response as JSON: ${textResponse.substring(0, 200)}`);
       }
-
-    } catch (error) {
-      console.error(`❌ createPost Error:`, error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
-      };
     }
+
+    return {
+      success: false,
+      error: 'All attempts failed'
+    };
   }
 
   /**
@@ -477,7 +497,15 @@ export class WordPressIntegration {
     // 末尾のスラッシュを削除してからREST APIパスを追加
     const cleanEndpoint = this.wpEndpoint.replace(/\/$/, '');
     
-    // デフォルトは ?rest_route= 形式を使用
+    // まず wp-json 形式を試す（SiteGuard Liteが ?rest_route= をブロックする可能性があるため）
+    return `${cleanEndpoint}/wp-json/wp/v2`;
+  }
+
+  /**
+   * フォールバック用の ?rest_route= 形式のURLを取得
+   */
+  private getFallbackApiUrl(): string {
+    const cleanEndpoint = this.wpEndpoint.replace(/\/$/, '');
     return `${cleanEndpoint}/?rest_route=/wp/v2`;
   }
 
