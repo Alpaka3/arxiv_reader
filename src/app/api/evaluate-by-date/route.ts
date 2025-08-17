@@ -5,15 +5,15 @@ import { DateEvaluationResponse } from '@/lib/types';
 export async function GET() {
   return NextResponse.json({
     message: 'Arxiv Papers Evaluation by Date API',
-    usage: 'POST with { "date": "YYYY-MM-DD", "debugMode": true, "postToWordPress": false }',
-    description: 'Evaluates papers from cs.AI, cs.CV, cs.LG categories for the specified date. Set postToWordPress to true to automatically post results to WordPress.'
+    usage: 'POST with { "date": "YYYY-MM-DD", "debugMode": true }',
+    description: 'Evaluates papers from cs.AI, cs.CV, cs.LG categories for the specified date and returns evaluation results only.'
   });
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { date, debugMode = true, postToWordPress = false } = body;
+    const { date, debugMode = true } = body;
 
     if (!date) {
       return NextResponse.json({
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     const evaluator = new ArxivPaperEvaluator();
-    const results = await evaluator.evaluatePapersByDate(date, debugMode, postToWordPress);
+    const results = await evaluator.evaluatePapersByDate(date, debugMode);
 
     return NextResponse.json({
       success: true,

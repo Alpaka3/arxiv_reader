@@ -359,7 +359,7 @@ Abstract: ${paperInfo.abstract}`;
   /**
    * 指定日付の論文リストを評価
    */
-  async evaluatePapersByDate(date: string, isDebugMode: boolean = true, postToWordPress: boolean = true): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
+  async evaluatePapersByDate(date: string, isDebugMode: boolean = true): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
     const papers = await this.fetchPapersByDate(date, isDebugMode);
     const results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}> = [];
 
@@ -389,39 +389,13 @@ Abstract: ${paperInfo.abstract}`;
     console.log(`Evaluation completed. Total evaluated: ${results.length}, returning top 3 results.`);
     console.log('Top 3 scores:', top3Results.map(r => r.formattedOutput.point));
 
-    // WordPressに投稿する場合
-    if (postToWordPress && top3Results.length > 0) {
-      try {
-        console.log('📝 WordPressに評価結果を投稿中...');
-        
-        const content = this.formatEvaluationResultsForWordPress(top3Results);
-        const title = `論文評価結果 - ${date}`;
-        
-        const postResult = await this.wordpressIntegration.createPost({
-          title: title,
-          content: content,
-          status: 'draft'
-        });
-
-        if (postResult.success) {
-          console.log('✅ WordPress投稿が正常に作成されました！');
-          console.log(`📄 投稿ID: ${postResult.postId}`);
-          console.log(`🔗 投稿URL: ${postResult.postUrl}`);
-        } else {
-          console.error('❌ WordPress投稿の作成に失敗しました:', postResult.error);
-        }
-      } catch (error) {
-        console.error('❌ WordPress投稿中にエラーが発生しました:', error);
-      }
-    }
-
     return top3Results;
   }
 
   /**
    * 指定日付の論文リストを評価し、上位3件の解説記事を生成
    */
-  async evaluatePapersWithArticles(date: string, isDebugMode: boolean = true): Promise<{
+  async evaluatePapersWithArticles(date: string, isDebugMode: boolean = true, postToWordPress: boolean = true): Promise<{
     results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>,
     articles: ArticleGenerationResult[]
   }> {
@@ -439,6 +413,39 @@ Abstract: ${paperInfo.abstract}`;
     const articles = await this.articleGenerator.generateArticlesForPapers(articleInputs);
     
     console.log(`Article generation completed. Generated ${articles.length} articles.`);
+
+    // WordPressに生成された記事を投稿する場合
+    if (postToWordPress && articles.length > 0) {
+      console.log('📝 WordPressに記事を投稿中...');
+      
+      for (let i = 0; i < articles.length; i++) {
+        const article = articles[i];
+        try {
+          console.log(`📝 記事 ${i + 1}/${articles.length} を投稿中: ${article.paper.title}`);
+          
+          const postResult = await this.wordpressIntegration.publishArticle(article);
+
+          if (postResult.success) {
+            console.log(`✅ 記事 ${i + 1} の投稿が完了しました！`);
+            console.log(`📄 投稿ID: ${postResult.postId}`);
+            console.log(`🔗 投稿URL: ${postResult.postUrl}`);
+          } else {
+            console.error(`❌ 記事 ${i + 1} の投稿に失敗しました:`, postResult.error);
+          }
+          
+          // 次の投稿まで少し待機（レート制限対策）
+          if (i < articles.length - 1) {
+            console.log('⏳ 次の投稿まで3秒待機...');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          
+        } catch (error) {
+          console.error(`❌ 記事 ${i + 1} の投稿中にエラーが発生しました:`, error);
+        }
+      }
+      
+      console.log(`✅ 全 ${articles.length} 記事の投稿処理が完了しました。`);
+    }
     
     return { results, articles };
   }
