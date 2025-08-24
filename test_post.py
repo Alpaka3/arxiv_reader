@@ -8,7 +8,7 @@ def main():
     date_str = yesterday.strftime("%Y-%m-%d")
 
     # url = "http://<ECSのPublicIP>:3000/api/evaluate-with-articles"
-    url = "http://13.115.63.249:3000/api/evaluate-with-articles"
+    url = "http://18.176.93.75:3000/api/evaluate-with-articles"
 
     payload = {
         "date": date_str,
@@ -48,4 +48,4 @@ def main():
 
 
 def lambda_handler(event, context):
-    return main(event, context)
+    return main()
