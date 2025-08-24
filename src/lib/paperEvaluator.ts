@@ -82,8 +82,7 @@ export class ArxivPaperEvaluator {
     // const categories = ['cs.AI', 'cs.CV', 'cs.LG'];
     const categories = ['cs.AI'];
     const papers: PaperInfo[] = [];
-    // const maxPapersPerCategory = isDebugMode ? 3 : Infinity;
-    const maxPapersPerCategory = isDebugMode ? 2 : Infinity;
+    const maxPapersPerCategory = isDebugMode ? 3 : Infinity;
   
     for (const category of categories) {
       let start = 0;
