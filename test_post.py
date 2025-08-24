@@ -4,11 +4,11 @@ from datetime import datetime, timedelta
 
 def main():
     # 昨日の日付を YYYY-MM-DD 形式で作成
-    yesterday = datetime.utcnow() - timedelta(days=3)
+    yesterday = datetime.utcnow() - timedelta(days=1)
     date_str = yesterday.strftime("%Y-%m-%d")
 
     # url = "http://<ECSのPublicIP>:3000/api/evaluate-with-articles"
-    url = "http://13.112.5.73:3000/api/evaluate-with-articles"
+    url = "http://13.115.63.249:3000/api/evaluate-with-articles"
 
     payload = {
         "date": date_str,
@@ -46,6 +46,6 @@ def main():
             })
         }
 
-if __name__ == "__main__":
-    main()
 
+def lambda_handler(event, context):
+    return main(event, context)
