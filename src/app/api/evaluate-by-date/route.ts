@@ -5,8 +5,8 @@ import { DateEvaluationResponse } from '@/lib/types';
 export async function GET() {
   return NextResponse.json({
     message: 'Arxiv Papers Evaluation by Date API',
-    usage: 'POST with { "date": "YYYY-MM-DD" }',
-    description: 'Evaluates papers from cs.AI, cs.CV, cs.LG categories for the specified date'
+    usage: 'POST with { "date": "YYYY-MM-DD", "debugMode": true }',
+    description: 'Evaluates papers from cs.AI, cs.CV, cs.LG categories for the specified date and returns evaluation results only.'
   });
 }
 

@@ -1,10 +1,12 @@
 import OpenAI from 'openai';
 import { PaperInfo, EvaluationResult, FormattedOutput, ArticleGenerationResult } from './types';
 import { PaperArticleGenerator } from './articleGenerator';
+import { WordPressIntegration } from './wordpressIntegration';
 
 export class ArxivPaperEvaluator {
   private openai: OpenAI;
   private articleGenerator: PaperArticleGenerator;
+  private wordpressIntegration: WordPressIntegration;
 
   constructor() {
     this.openai = new OpenAI({
@@ -12,6 +14,7 @@ export class ArxivPaperEvaluator {
       baseURL: process.env.OPENAI_API_BASE,
     });
     this.articleGenerator = new PaperArticleGenerator();
+    this.wordpressIntegration = new WordPressIntegration();
   }
 
   /**
@@ -79,8 +82,7 @@ export class ArxivPaperEvaluator {
     // const categories = ['cs.AI', 'cs.CV', 'cs.LG'];
     const categories = ['cs.AI'];
     const papers: PaperInfo[] = [];
-    // const maxPapersPerCategory = isDebugMode ? 3 : Infinity;
-    const maxPapersPerCategory = isDebugMode ? 1 : Infinity;
+    const maxPapersPerCategory = isDebugMode ? 3 : Infinity;
   
     for (const category of categories) {
       let start = 0;
@@ -208,8 +210,8 @@ Abstract: ${paperInfo.abstract}`;
 
     try {
       const completion = await this.openai.chat.completions.create({
-        // model: 'gpt-4.1-mini',
-        model: 'gpt-4.1-nano',
+        model: 'gpt-4.1-mini',
+        // model: 'gpt-4.1-nano',
         messages: [
           {
             role: 'user',
@@ -217,7 +219,7 @@ Abstract: ${paperInfo.abstract}`;
           }
         ],
         temperature: 0.3,
-        max_tokens: 1000
+        max_tokens: 10000
       });
 
       const content = completion.choices[0].message.content || '';
@@ -311,6 +313,49 @@ Abstract: ${paperInfo.abstract}`;
   }
 
   /**
+   * 論文評価結果をWordPress投稿用のHTMLコンテンツに変換
+   */
+  private formatEvaluationResultsForWordPress(results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>): string {
+    if (!results || results.length === 0) {
+      return '<p>評価結果がありません。</p>';
+    }
+
+    let content = '<div class="paper-evaluation-results">\n';
+    
+    results.forEach((result, index) => {
+      const { paper, evaluation, formattedOutput } = result;
+      
+      content += `
+  <div class="paper-result" style="margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+    <h3>${index + 1}. ${paper.title}</h3>
+    
+    <div class="paper-info" style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 15px 0;">
+      <p><strong>arXiv ID:</strong> <a href="https://arxiv.org/abs/${paper.arxivId}" target="_blank">${paper.arxivId}</a></p>
+      <p><strong>著者:</strong> ${paper.authors.join(', ')}</p>
+      <p><strong>カテゴリ:</strong> ${paper.subjects.join(', ')}</p>
+      <p><strong>評価スコア:</strong> <span style="background-color: #3b82f6; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold;">${formattedOutput.point}点</span></p>
+    </div>
+    
+    <div class="evaluation-details">
+      <h4>📊 評価理由</h4>
+      <div style="background-color: #f0f9ff; padding: 15px; border-radius: 5px; margin: 10px 0;">
+        <p>${formattedOutput.reasoning.replace(/\n/g, '<br>')}</p>
+      </div>
+      
+      <h4>🔢 計算過程</h4>
+      <div style="background-color: #fefce8; padding: 15px; border-radius: 5px; margin: 10px 0;">
+        <p>${formattedOutput.calculation.replace(/\n/g, '<br>')}</p>
+      </div>
+    </div>
+  </div>
+`;
+    });
+    
+    content += '</div>';
+    return content;
+  }
+
+  /**
    * 指定日付の論文リストを評価
    */
   async evaluatePapersByDate(date: string, isDebugMode: boolean = true): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
@@ -349,7 +394,7 @@ Abstract: ${paperInfo.abstract}`;
   /**
    * 指定日付の論文リストを評価し、上位3件の解説記事を生成
    */
-  async evaluatePapersWithArticles(date: string, isDebugMode: boolean = true): Promise<{
+  async evaluatePapersWithArticles(date: string, isDebugMode: boolean = true, postToWordPress: boolean = true): Promise<{
     results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>,
     articles: ArticleGenerationResult[]
   }> {
@@ -367,6 +412,39 @@ Abstract: ${paperInfo.abstract}`;
     const articles = await this.articleGenerator.generateArticlesForPapers(articleInputs);
     
     console.log(`Article generation completed. Generated ${articles.length} articles.`);
+
+    // WordPressに生成された記事を投稿する場合
+    if (postToWordPress && articles.length > 0) {
+      console.log('📝 WordPressに記事を投稿中...');
+      
+      for (let i = 0; i < articles.length; i++) {
+        const article = articles[i];
+        try {
+          console.log(`📝 記事 ${i + 1}/${articles.length} を投稿中: ${article.paper.title}`);
+          
+          const postResult = await this.wordpressIntegration.publishArticle(article);
+
+          if (postResult.success) {
+            console.log(`✅ 記事 ${i + 1} の投稿が完了しました！`);
+            console.log(`📄 投稿ID: ${postResult.postId}`);
+            console.log(`🔗 投稿URL: ${postResult.postUrl}`);
+          } else {
+            console.error(`❌ 記事 ${i + 1} の投稿に失敗しました:`, postResult.error);
+          }
+          
+          // 次の投稿まで少し待機（レート制限対策）
+          if (i < articles.length - 1) {
+            console.log('⏳ 次の投稿まで3秒待機...');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          
+        } catch (error) {
+          console.error(`❌ 記事 ${i + 1} の投稿中にエラーが発生しました:`, error);
+        }
+      }
+      
+      console.log(`✅ 全 ${articles.length} 記事の投稿処理が完了しました。`);
+    }
     
     return { results, articles };
   }
