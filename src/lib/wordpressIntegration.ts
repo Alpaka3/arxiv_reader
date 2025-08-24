@@ -42,7 +42,7 @@ export class WordPressIntegration {
     return {
       title: article.title,
       content,
-      status: 'draft', // または 'publish'
+      status: 'publish', // 'draft' or 'publish'
       excerpt: article.tldr,
       // tagsとcategoriesは一旦削除してシンプルにする
       // meta情報も削除して基本的な投稿のみ行う
