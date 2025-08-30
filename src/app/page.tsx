@@ -5,13 +5,14 @@ import { EvaluationResponse, DateEvaluationResponse, PaperEvaluationResult, Arti
 import MathRenderer from '@/components/MathRenderer';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'single' | 'date'>('single');
+  const [activeTab, setActiveTab] = useState<'single' | 'date' | 'new'>('single');
   const [arxivUrl, setArxivUrl] = useState('https://arxiv.org/abs/2507.14077');
   const [date, setDate] = useState('2025-01-20');
   const [debugMode, setDebugMode] = useState(true);
   const [loading, setLoading] = useState(false);
   const [singleResult, setSingleResult] = useState<EvaluationResponse | null>(null);
   const [dateResults, setDateResults] = useState<DateEvaluationResponse | null>(null);
+  const [newPaperResults, setNewPaperResults] = useState<DateEvaluationResponse | null>(null);
   const [generateArticles, setGenerateArticles] = useState(false);
   const [postToWordPress, setPostToWordPress] = useState(false);
 
@@ -70,6 +71,35 @@ export default function Home() {
     } catch (error) {
       console.error('Error:', error);
       setDateResults({
+        success: false,
+        date: '',
+        totalPapers: 0,
+        error: 'ネットワークエラーが発生しました'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const evaluateNewPapers = async () => {
+    setLoading(true);
+    setNewPaperResults(null);
+
+    try {
+      const endpoint = generateArticles ? '/api/evaluate-new-with-articles' : '/api/evaluate-by-number';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ debugMode, postToWordPress }),
+      });
+
+      const data: DateEvaluationResponse = await response.json();
+      setNewPaperResults(data);
+    } catch (error) {
+      console.error('Error:', error);
+      setNewPaperResults({
         success: false,
         date: '',
         totalPapers: 0,
@@ -265,6 +295,16 @@ export default function Home() {
           >
             日付指定論文リスト評価
           </button>
+          <button
+            onClick={() => setActiveTab('new')}
+            className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
+              activeTab === 'new'
+                ? 'bg-blue-500 text-white'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            新着論文評価
+          </button>
         </div>
 
         {/* 単一論文評価タブ */}
@@ -382,6 +422,90 @@ export default function Home() {
             </button>
 
             {dateResults && renderDateEvaluation(dateResults)}
+          </div>
+        )}
+
+        {/* 新着論文評価タブ */}
+        {activeTab === 'new' && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h3 className="text-lg font-semibold text-blue-800 mb-2">🔄 新着論文の自動評価</h3>
+              <p className="text-blue-700 text-sm">
+                Parameter Storeに保存された最後の論文番号より新しい論文のみを自動的に評価します。
+                ArXiv ID（例：2508.20310）の番号部分を基準に、未処理の論文を効率的に検出します。
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={debugMode}
+                  onChange={(e) => setDebugMode(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  DEBUGモード（各カテゴリ3件ずつ評価、上位3件のみ表示）
+                </span>
+              </label>
+            </div>
+
+            <div className="mb-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={generateArticles}
+                  onChange={(e) => setGenerateArticles(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  📝 解説記事を生成する（上位3件の論文について詳細な記事を自動生成）
+                </span>
+              </label>
+            </div>
+
+            <div className="mb-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={postToWordPress}
+                  onChange={(e) => setPostToWordPress(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  🌐 WordPressに自動投稿する（評価結果を下書きとして投稿）
+                </span>
+              </label>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-600">
+                {debugMode 
+                  ? 'cs.AI, cs.CV, cs.LGカテゴリから各3件ずつ新着論文を評価し、上位3件を表示します' 
+                  : 'cs.AI, cs.CV, cs.LGカテゴリの全ての新着論文を評価します'
+                }
+                {generateArticles && (
+                  <span className="block mt-1 text-purple-600 font-medium">
+                    💡 解説記事生成が有効です。評価後に上位3件の詳細記事を自動生成します。
+                  </span>
+                )}
+                {postToWordPress && (
+                  <span className="block mt-1 text-blue-600 font-medium">
+                    🌐 WordPress投稿が有効です。評価完了後に結果を自動的にWordPressに下書き投稿します。
+                  </span>
+                )}
+              </p>
+            </div>
+
+            <button
+              onClick={evaluateNewPapers}
+              disabled={loading}
+              className="w-full bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+            >
+              {loading ? '評価中...' : '新着論文を評価する'}
+            </button>
+
+            {newPaperResults && renderDateEvaluation(newPaperResults)}
           </div>
         )}
       </div>

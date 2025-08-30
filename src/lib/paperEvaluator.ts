@@ -2,11 +2,13 @@ import OpenAI from 'openai';
 import { PaperInfo, EvaluationResult, FormattedOutput, ArticleGenerationResult } from './types';
 import { PaperArticleGenerator } from './articleGenerator';
 import { WordPressIntegration } from './wordpressIntegration';
+import { ParameterStoreManager } from './parameterStore';
 
 export class ArxivPaperEvaluator {
   private openai: OpenAI;
   private articleGenerator: PaperArticleGenerator;
   private wordpressIntegration: WordPressIntegration;
+  private parameterStore: ParameterStoreManager;
 
   constructor() {
     this.openai = new OpenAI({
@@ -15,6 +17,7 @@ export class ArxivPaperEvaluator {
     });
     this.articleGenerator = new PaperArticleGenerator();
     this.wordpressIntegration = new WordPressIntegration();
+    this.parameterStore = new ParameterStoreManager();
   }
 
   /**
@@ -76,7 +79,136 @@ export class ArxivPaperEvaluator {
   }
 
   /**
-   * 指定日付のarXiv論文リストを取得
+   * 論文番号ベースでarXiv論文リストを取得
+   */
+  async fetchPapersByNumber(isDebugMode: boolean = true): Promise<PaperInfo[]> {
+    // const categories = ['cs.AI', 'cs.CV', 'cs.LG'];
+    const categories = ['cs.AI'];
+    const papers: PaperInfo[] = [];
+    const maxPapersPerCategory = isDebugMode ? 3 : Infinity;
+    
+    // Parameter Storeから最後の論文番号を取得
+    const lastArxivNumber = await this.parameterStore.getLastArxivNumber();
+    console.log(`Starting from ArXiv number: ${lastArxivNumber}`);
+    
+    let latestArxivNumber = lastArxivNumber;
+  
+    for (const category of categories) {
+      let start = 0;
+      let keepFetching = true;
+      let categoryCount = 0;
+  
+      while (keepFetching && categoryCount < maxPapersPerCategory) {
+        try {
+          const apiUrl = `http://export.arxiv.org/api/query?search_query=cat:${category}&start=${start}&max_results=100&sortBy=submittedDate&sortOrder=descending`;
+          const response = await fetch(apiUrl);
+          if (!response.ok) {
+            console.warn(`Failed to fetch papers for category ${category}`);
+            break;
+          }
+  
+          const xmlText = await response.text();
+          const entryMatches = [...xmlText.matchAll(/<entry>([\s\S]*?)<\/entry>/g)];
+  
+          if (entryMatches.length === 0) break;  // もうエントリがない＝終了
+  
+          let foundNewPaper = false;
+  
+          for (const entryMatch of entryMatches) {
+            if (categoryCount >= maxPapersPerCategory) break;
+            
+            const entryXml = entryMatch[1];
+            
+            // 論文情報抽出
+            const titleMatch = entryXml.match(/<title[^>]*>([\s\S]*?)<\/title>/);
+            const summaryMatch = entryXml.match(/<summary[^>]*>([\s\S]*?)<\/summary>/);
+            const idMatch = entryXml.match(/<id[^>]*>.*?\/([0-9]{4}\.[0-9]{4,5})(?:v[0-9]+)?<\/id>/);
+            const publishedMatch = entryXml.match(/<published>(.*?)<\/published>/);
+
+            const title = titleMatch ? titleMatch[1].trim() : '';
+            const abstract = summaryMatch ? summaryMatch[1].trim() : '';
+            const arxivId = idMatch ? idMatch[1] : '';
+            const publishedDate = publishedMatch ? publishedMatch[1].split('T')[0] : '';
+
+            if (!arxivId) continue;
+
+            // 論文番号が最後の番号より新しいかチェック
+            if (this.parameterStore.isNewerThanLast(arxivId, lastArxivNumber)) {
+              console.log(`New paper found: ${arxivId} (${category}), count: ${categoryCount}`);
+              foundNewPaper = true;
+
+              const authors: string[] = [];
+              const authorMatches = entryXml.matchAll(/<name[^>]*>(.*?)<\/name>/g);
+              for (const match of authorMatches) {
+                const name = match[1].trim();
+                if (name) authors.push(name);
+              }
+
+              const subjects: string[] = [];
+              const categoryMatches = entryXml.matchAll(/<category[^>]*term="([^"]*)"[^>]*>/g);
+              for (const match of categoryMatches) {
+                const term = match[1];
+                if (term) subjects.push(term);
+              }
+
+              if (title && abstract) {
+                papers.push({
+                  title,
+                  authors,
+                  abstract,
+                  arxivId,
+                  subjects,
+                  publishedDate
+                });
+                categoryCount++;
+
+                // 最新の論文番号を更新
+                if (this.parameterStore.compareArxivNumbers(arxivId, latestArxivNumber) > 0) {
+                  latestArxivNumber = arxivId;
+                }
+              }
+            } else {
+              // 古い論文に到達したら、このカテゴリの検索を終了
+              console.log(`Reached old paper: ${arxivId}, stopping search for ${category}`);
+              keepFetching = false;
+              break;
+            }
+          }
+
+          // 新しい論文が見つからなかった場合、検索を終了
+          if (!foundNewPaper) {
+            console.log(`No new papers found in this batch for ${category}, stopping search`);
+            keepFetching = false;
+          }
+  
+          start += 100;
+          await new Promise(r => setTimeout(r, 1000));  // レート制限回避
+  
+        } catch (error) {
+          console.warn(`Error fetching papers for category ${category}:`, error);
+          break;
+        }
+      }
+      
+      console.log(`Category ${category}: found ${categoryCount} new papers`);
+    }
+
+    // 新しい論文が見つかった場合、Parameter Storeを更新
+    if (latestArxivNumber !== lastArxivNumber) {
+      try {
+        await this.parameterStore.setLastArxivNumber(latestArxivNumber);
+        console.log(`Updated last ArXiv number to: ${latestArxivNumber}`);
+      } catch (error) {
+        console.error('Failed to update Parameter Store:', error);
+      }
+    }
+  
+    console.log(`Total new papers found: ${papers.length}`);
+    return papers;
+  }
+
+  /**
+   * 指定日付のarXiv論文リストを取得（後方互換性のため保持）
    */
   async fetchPapersByDate(date: string, isDebugMode: boolean = true): Promise<PaperInfo[]> {
     // const categories = ['cs.AI', 'cs.CV', 'cs.LG'];
@@ -356,7 +488,43 @@ Abstract: ${paperInfo.abstract}`;
   }
 
   /**
-   * 指定日付の論文リストを評価
+   * 論文番号ベースで新しい論文リストを評価
+   */
+  async evaluateNewPapers(isDebugMode: boolean = true): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
+    const papers = await this.fetchPapersByNumber(isDebugMode);
+    const results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}> = [];
+
+    console.log(`Starting evaluation of ${papers.length} new papers...`);
+
+    for (const paper of papers) {
+      try {
+        const startTime = Date.now();
+        const { evaluation, formattedOutput } = await this.evaluatePaperWithOpenAI(paper);
+        const endTime = Date.now();
+        const durationMs = endTime - startTime;
+        console.log(`Evaluation of ${paper.arxivId} took ${durationMs} ms, score: ${formattedOutput.point}`);
+
+        results.push({ paper, evaluation, formattedOutput });
+        
+        // API制限を考慮して少し待機
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error) {
+        console.warn(`Failed to evaluate paper ${paper.arxivId}:`, error);
+      }
+    }
+
+    // 点数順にソートして上位3件のみを返す
+    const sortedResults = results.sort((a, b) => b.formattedOutput.point - a.formattedOutput.point);
+    const top3Results = sortedResults.slice(0, 3);
+    
+    console.log(`Evaluation completed. Total evaluated: ${results.length}, returning top 3 results.`);
+    console.log('Top 3 scores:', top3Results.map(r => r.formattedOutput.point));
+
+    return top3Results;
+  }
+
+  /**
+   * 指定日付の論文リストを評価（後方互換性のため保持）
    */
   async evaluatePapersByDate(date: string, isDebugMode: boolean = true): Promise<Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>> {
     const papers = await this.fetchPapersByDate(date, isDebugMode);
@@ -392,7 +560,65 @@ Abstract: ${paperInfo.abstract}`;
   }
 
   /**
-   * 指定日付の論文リストを評価し、上位3件の解説記事を生成
+   * 新しい論文リストを評価し、上位3件の解説記事を生成
+   */
+  async evaluateNewPapersWithArticles(isDebugMode: boolean = true, postToWordPress: boolean = true): Promise<{
+    results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>,
+    articles: ArticleGenerationResult[]
+  }> {
+    // 論文評価を実行
+    const results = await this.evaluateNewPapers(isDebugMode);
+    
+    console.log(`Starting article generation for top ${results.length} papers...`);
+    
+    // 上位3件の論文について記事を生成
+    const articleInputs = results.map(result => ({
+      paper: result.paper,
+      evaluation: result.evaluation
+    }));
+    
+    const articles = await this.articleGenerator.generateArticlesForPapers(articleInputs);
+    
+    console.log(`Article generation completed. Generated ${articles.length} articles.`);
+
+    // WordPressに生成された記事を投稿する場合
+    if (postToWordPress && articles.length > 0) {
+      console.log('📝 WordPressに記事を投稿中...');
+      
+      for (let i = 0; i < articles.length; i++) {
+        const article = articles[i];
+        try {
+          console.log(`📝 記事 ${i + 1}/${articles.length} を投稿中: ${article.paper.title}`);
+          
+          const postResult = await this.wordpressIntegration.publishArticle(article);
+
+          if (postResult.success) {
+            console.log(`✅ 記事 ${i + 1} の投稿が完了しました！`);
+            console.log(`📄 投稿ID: ${postResult.postId}`);
+            console.log(`🔗 投稿URL: ${postResult.postUrl}`);
+          } else {
+            console.error(`❌ 記事 ${i + 1} の投稿に失敗しました:`, postResult.error);
+          }
+          
+          // 次の投稿まで少し待機（レート制限対策）
+          if (i < articles.length - 1) {
+            console.log('⏳ 次の投稿まで3秒待機...');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          
+        } catch (error) {
+          console.error(`❌ 記事 ${i + 1} の投稿中にエラーが発生しました:`, error);
+        }
+      }
+      
+      console.log(`✅ 全 ${articles.length} 記事の投稿処理が完了しました。`);
+    }
+    
+    return { results, articles };
+  }
+
+  /**
+   * 指定日付の論文リストを評価し、上位3件の解説記事を生成（後方互換性のため保持）
    */
   async evaluatePapersWithArticles(date: string, isDebugMode: boolean = true, postToWordPress: boolean = true): Promise<{
     results: Array<{paper: PaperInfo, evaluation: EvaluationResult, formattedOutput: FormattedOutput}>,
